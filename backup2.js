@@ -40,11 +40,16 @@
           let downloadLink = document.createElement('a');
           downloadLink.href = URL.createObjectURL(blob);
           downloadLink.download = 'lampa_settings.json';
+          document.body.appendChild(downloadLink);
           downloadLink.click();
+          document.body.removeChild(downloadLink);
           URL.revokeObjectURL(downloadLink.href);
 
-          // Уведомление об успехе
-          Lampa.Noty.show('Бэкап успешно сохранен!');
+          // Уведомление об успехе с задержкой и возврат в настройки
+          setTimeout(function() {
+            Lampa.Noty.show('Бэкап успешно сохранен!');
+            Lampa.SettingsApi.open();
+          }, 1500); // Задержка 1.5 секунды для завершения выбора места сохранения
         }
       },
       onBack: function() {}
