@@ -2,83 +2,87 @@
   'use strict';
 
   function saveSettingsToFile() {
-    // Подтверждение сохранения
-    Lampa.Noty.show('Сохранить бэкап?', {
-      buttons: [
-        {
-          text: Lampa.Lang.translate('yes'),
-          onSelect: function() {
-            let settings = {};
-            let fields = [
-              'file_view',
-              'online_view',
-              'online_last_balanser',
-              'online_watched_last',
-              'torrents_view',
-              'torrents_filter_data',
-              'favorite',
-              'account_bookmarks'
-            ];
+    // Показываем модальное окно для подтверждения
+    Lampa.Select.show({
+      title: Lampa.Lang.translate('lampac_backup_save'),
+      items: [
+        { title: Lampa.Lang.translate('yes'), selected: true },
+        { title: Lampa.Lang.translate('no') }
+      ],
+      onSelect: function(item) {
+        if (item.title === Lampa.Lang.translate('yes')) {
+          let settings = {};
+          let fields = [
+            'file_view',
+            'online_view',
+            'online_last_balanser',
+            'online_watched_last',
+            'torrents_view',
+            'torrents_filter_data',
+            'favorite',
+            'account_bookmarks'
+          ];
 
-            // Добавляем профиль-специфичные данные
-            let acc = Lampa.Storage.get('account', '{}');
-            if (acc.profile) {
-              fields.push('file_view_' + acc.profile.id);
-            }
-
-            // Собираем указанные настройки
-            fields.forEach(function(field) {
-              settings[field] = Lampa.Storage.get(field, '');
-            });
-
-            // Создаем JSON и инициируем скачивание
-            let fileContent = JSON.stringify(settings, null, 2);
-            let blob = new Blob([fileContent], { type: 'application/json' });
-            let downloadLink = document.createElement('a');
-            downloadLink.href = URL.createObjectURL(blob);
-            downloadLink.download = 'lampa_settings.json';
-            downloadLink.click();
-            URL.revokeObjectURL(downloadLink.href);
-
-            // Уведомление об успехе
-            Lampa.Noty.show('Бэкап успешно сохранен!');
+          // Добавляем профиль-специфичные данные
+          let acc = Lampa.Storage.get('account', '{}');
+          if (acc.profile) {
+            fields.push('file_view_' + acc.profile.id);
           }
-        },
-        { text: Lampa.Lang.translate('no'), onSelect: function() {} }
-      ]
+
+          // Собираем указанные настройки
+          fields.forEach(function(field) {
+            settings[field] = Lampa.Storage.get(field, '');
+          });
+
+          // Создаем JSON и инициируем скачивание
+          let fileContent = JSON.stringify(settings, null, 2);
+          let blob = new Blob([fileContent], { type: 'application/json' });
+          let downloadLink = document.createElement('a');
+          downloadLink.href = URL.createObjectURL(blob);
+          downloadLink.download = 'lampa_settings.json';
+          downloadLink.click();
+          URL.revokeObjectURL(downloadLink.href);
+
+          // Уведомление об успехе
+          Lampa.Noty.show('Бэкап успешно сохранен!');
+        }
+      },
+      onBack: function() {}
     });
   }
 
   function restoreSettingsFromFile(file) {
-    // Подтверждение восстановления
-    Lampa.Noty.show('Восстановить бэкап?', {
-      buttons: [
-        {
-          text: Lampa.Lang.translate('yes'),
-          onSelect: function() {
-            let reader = new FileReader();
-            reader.onload = function(event) {
-              try {
-                let importedSettings = JSON.parse(event.target.result);
-                // Восстанавливаем настройки
-                for (let key in importedSettings) {
-                  if (importedSettings.hasOwnProperty(key)) {
-                    Lampa.Storage.set(key, importedSettings[key], true);
-                    if (key === 'favorite') Lampa.Favorite.init();
-                  }
+    // Показываем модальное окно для подтверждения
+    Lampa.Select.show({
+      title: Lampa.Lang.translate('lampac_backup_load'),
+      items: [
+        { title: Lampa.Lang.translate('yes'), selected: true },
+        { title: Lampa.Lang.translate('no') }
+      ],
+      onSelect: function(item) {
+        if (item.title === Lampa.Lang.translate('yes')) {
+          let reader = new FileReader();
+          reader.onload = function(event) {
+            try {
+              let importedSettings = JSON.parse(event.target.result);
+              // Восстанавливаем настройки
+              for (let key in importedSettings) {
+                if (importedSettings.hasOwnProperty(key)) {
+                  Lampa.Storage.set(key, importedSettings[key], true);
+                  if (key === 'favorite') Lampa.Favorite.init();
                 }
-                // Уведомление об успехе и перезагрузка
-                Lampa.Noty.show('Бэкап успешно восстановлен!');
-                location.reload();
-              } catch (error) {
-                Lampa.Noty.show('Ошибка при восстановлении бэкапа: ' + error.message);
               }
-            };
-            reader.readAsText(file);
-          }
-        },
-        { text: Lampa.Lang.translate('no'), onSelect: function() {} }
-      ]
+              // Уведомление об успехе и перезагрузка
+              Lampa.Noty.show('Бэкап успешно восстановлен!');
+              location.reload();
+            } catch (error) {
+              Lampa.Noty.show('Ошибка при восстановлении бэкапа: ' + error.message);
+            }
+          };
+          reader.readAsText(file);
+        }
+      },
+      onBack: function() {}
     });
   }
 
