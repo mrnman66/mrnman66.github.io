@@ -6,8 +6,9 @@
     if (window.lampa_backup_init) return;
     window.lampa_backup_init = true;
 
-    // Add backup/restore buttons to Lampa UI (assuming Lampa has a menu API)
-    Lampa.Menu.add('backup', {
+    // Add backup/restore buttons to Lampa settings tab
+    Lampa.SettingsApi.addComponent({
+      component: 'backup_settings',
       title: 'Backup Settings',
       subtitle: 'Save or restore settings',
       items: [
