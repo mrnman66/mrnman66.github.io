@@ -3,26 +3,19 @@
 
   function saveSettingsToFile() {
     let storageSettings = {}; // Из localStorage
-    let globalSettings = {}; // Из window.lampa_settings
 
     // Сбор данных из localStorage
     Object.keys(localStorage).forEach(key => {
       storageSettings[key] = localStorage.getItem(key);
     });
 
-    // Сбор данных из window.lampa_settings
-    if (typeof window.lampa_settings === 'object') {
-      Object.assign(globalSettings, window.lampa_settings);
-    }
-
-    // Объединяем объекты в единый набор данных
+    // Объединяем объекты в единый набор данных (без globals)
     let allSettings = {
-      storage: storageSettings,
-      globals: globalSettings
+      storage: storageSettings
     };
 
     let fileContent = JSON.stringify(allSettings, null, 2); // Преобразование в JSON
-    let blob = new Blob([fileContent], {type : 'application/json'});
+    let blob = new Blob([fileContent], {type: 'application/json'});
     let downloadLink = document.createElement('a');
     downloadLink.href = URL.createObjectURL(blob);
     downloadLink.download = 'lampa_settings.json';
@@ -43,11 +36,7 @@
           });
         }
 
-        // Восстанавливаем данные из window.lampa_settings
-        if (importedSettings.globals && typeof importedSettings.globals === 'object') {
-          Object.assign(window.lampa_settings, importedSettings.globals);
-        }
-
+        // Убрано: window.lampa_settings не восстанавливается
         location.reload(); // Перезагружаем страницу для обновления
       } catch(error) {
         alert("Ошибка при восстановлении настроек: " + error.message);
