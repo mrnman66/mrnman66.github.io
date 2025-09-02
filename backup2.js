@@ -41,18 +41,14 @@
           downloadLink.href = URL.createObjectURL(blob);
           downloadLink.download = 'lampa_settings.json';
           document.body.appendChild(downloadLink);
-
-          // Добавляем обработчик события focus для показа уведомления
-          let focusHandler = function() {
-            Lampa.Noty.show(Lampa.Lang.translate('lampac_backup_export_success'));
-            Lampa.Controller.toggle('settings_component');
-            window.removeEventListener('focus', focusHandler); // Удаляем обработчик после срабатывания
-          };
-          window.addEventListener('focus', focusHandler);
-
           downloadLink.click();
           document.body.removeChild(downloadLink);
           URL.revokeObjectURL(downloadLink.href);
+
+          // Закрываем интерфейс через 500 мс — без уведомления об успехе
+          setTimeout(function() {
+            Lampa.Controller.toggle('settings_component');
+          }, 500);
         } else {
           Lampa.Controller.toggle('settings_component');
         }
