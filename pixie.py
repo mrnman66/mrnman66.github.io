@@ -1048,6 +1048,8 @@ Advanced arguments:
     --iface-down             : Down network interface when the work is finished
     -l, --loop               : Run in a loop
     -r, --reverse-scan       : Reverse order of networks in the list of networks. Useful on small displays
+    --mtk-wifi               : Activate MediaTek Wi-Fi interface driver on startup and deactivate it on exit
+                               (for internal Wi-Fi adapters implemented in MediaTek SoCs). Turn off Wi-Fi in the system settings before using this.    
     -v, --verbose            : Verbose output
 
 Example:
@@ -1131,10 +1133,17 @@ if __name__ == '__main__':
         help='Reverse order of networks in the list of networks. Useful on small displays'
     )
     parser.add_argument(
+        '--mtk-wifi',
+        action='store_true',
+        help='Activate MediaTek Wi-Fi interface driver on startup and deactivate it on exit '
+             '(for internal Wi-Fi adapters implemented in MediaTek SoCs). '
+             'Turn off Wi-Fi in the system settings before using this.'
+    )
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Verbose output'
-        )
+    )
 
     args = parser.parse_args()
 
@@ -1143,7 +1152,7 @@ if __name__ == '__main__':
     if os.getuid() != 0:
         die("Run it as root")
 
-     if args.mtk_wifi:
+    if args.mtk_wifi:
         wmtWifi_device = Path("/dev/wmtWifi")
         if not wmtWifi_device.is_char_device():
             die("Unable to activate MediaTek Wi-Fi interface device (--mtk-wifi): "
@@ -1192,6 +1201,7 @@ if __name__ == '__main__':
     if args.iface_down:
         ifaceUp(args.interface, down=True)
 
-     if args.mtk_wifi:
+    if args.mtk_wifi:
         wmtWifi_device.write_text("0")
+
                 
