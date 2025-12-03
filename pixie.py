@@ -971,6 +971,9 @@ class WiFiScanner:
         for n, network in network_list_items:
             number = f'{n})'
             model = '{} {}'.format(network['Model'], network['Model number'])
+            if 'ESSID' not in network:
+                network['ESSID'] = '<hidden>' if
+            network.get('hidden') else ''
             essid = truncateStr(network['ESSID'], 25)
             deviceName = truncateStr(network['Device name'], 27)
             line = '{:<4} {:<18} {:<25} {:<8} {:<4} {:<27} {:<}'.format(
