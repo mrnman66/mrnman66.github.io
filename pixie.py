@@ -14,7 +14,6 @@ from datetime import datetime
 import collections
 import statistics
 import csv
-from pathlib import Path
 from typing import Dict
 
 
@@ -971,20 +970,18 @@ class WiFiScanner:
         for n, network in network_list_items:
             number = f'{n})'
             model = '{} {}'.format(network['Model'], network['Model number'])
-            essid = truncateStr(network.get('ESSID', 'UNKNOWN ESSID'), 25)
+            essid = truncateStr(network['ESSID'], 25)
             deviceName = truncateStr(network['Device name'], 27)
             line = '{:<4} {:<18} {:<25} {:<8} {:<4} {:<27} {:<}'.format(
                 number, network['BSSID'], essid,
                 network['Security type'], network['Level'],
                 deviceName, model
                 )
-            if (network['BSSID'],  network.get('ESSID', '')) in self.stored:
+            if (network['BSSID'], network['ESSID']) in self.stored:
                 print(colored(line, color='yellow'))
             elif network['WPS locked']:
                 print(colored(line, color='red'))
-            elif ((self.vuln_list and (model in self.vuln_list))
-                  or self.checkvuln_from_pin_csv(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                                              'pins.csv'), network['BSSID'])):
+            elif self.vuln_list and (model in self.vuln_list):
                 print(colored(line, color='green'))
             else:
                 print(line)
@@ -1051,8 +1048,6 @@ Advanced arguments:
     --iface-down             : Down network interface when the work is finished
     -l, --loop               : Run in a loop
     -r, --reverse-scan       : Reverse order of networks in the list of networks. Useful on small displays
-    --mtk-wifi               : Activate MediaTek Wi-Fi interface driver on startup and deactivate it on exit
-                               (for internal Wi-Fi adapters implemented in MediaTek SoCs). Turn off Wi-Fi in the system settings before using this.    
     -v, --verbose            : Verbose output
 
 Example:
@@ -1136,17 +1131,10 @@ if __name__ == '__main__':
         help='Reverse order of networks in the list of networks. Useful on small displays'
     )
     parser.add_argument(
-        '--mtk-wifi',
-        action='store_true',
-        help='Activate MediaTek Wi-Fi interface driver on startup and deactivate it on exit '
-             '(for internal Wi-Fi adapters implemented in MediaTek SoCs). '
-             'Turn off Wi-Fi in the system settings before using this.'
-    )
-    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Verbose output'
-    )
+        )
 
     args = parser.parse_args()
 
@@ -1155,14 +1143,6 @@ if __name__ == '__main__':
     if os.getuid() != 0:
         die("Run it as root")
 
-    if args.mtk_wifi:
-        wmtWifi_device = Path("/dev/wmtWifi")
-        if not wmtWifi_device.is_char_device():
-            die("Unable to activate MediaTek Wi-Fi interface device (--mtk-wifi): "
-                "/dev/wmtWifi does not exist or it is not a character device")
-        wmtWifi_device.chmod(0o644)
-        wmtWifi_device.write_text("1")
-                    
     if not ifaceUp(args.interface):
         die('Unable to up interface "{}"'.format(args.interface))
 
@@ -1203,8 +1183,3 @@ if __name__ == '__main__':
 
     if args.iface_down:
         ifaceUp(args.interface, down=True)
-
-    if args.mtk_wifi:
-        wmtWifi_device.write_text("0")
-
-                
