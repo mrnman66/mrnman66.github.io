@@ -971,20 +971,20 @@ class WiFiScanner:
         for n, network in network_list_items:
             number = f'{n})'
             model = '{} {}'.format(network['Model'], network['Model number'])
-            if 'ESSID' not in network:
-                network['ESSID'] = '<hidden>' if network.get('hidden') else ''
-            essid = truncateStr(network['ESSID'], 25)
+            essid = truncateStr(network.get('ESSID', 'UNKNOWN ESSID'), 25)
             deviceName = truncateStr(network['Device name'], 27)
             line = '{:<4} {:<18} {:<25} {:<8} {:<4} {:<27} {:<}'.format(
                 number, network['BSSID'], essid,
                 network['Security type'], network['Level'],
                 deviceName, model
                 )
-            if (network['BSSID'], network['ESSID']) in self.stored:
+            if (network['BSSID'],  network.get('ESSID', '')) in self.stored:
                 print(colored(line, color='yellow'))
             elif network['WPS locked']:
                 print(colored(line, color='red'))
-            elif self.vuln_list and (model in self.vuln_list):
+            elif ((self.vuln_list and (model in self.vuln_list))
+                  or self.checkvuln_from_pin_csv(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                              'pins.csv'), network['BSSID'])):
                 print(colored(line, color='green'))
             else:
                 print(line)
