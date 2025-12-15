@@ -1,8 +1,8 @@
 // ==LampaPlugin==
-// @name         Без рекламы + полные закладки (локально)
-// @description  Отключает рекламу и включает ВСЕ типы закладок без аккаунта CUB
+// @name         Без рекламы + полные закладки
+// @description  Отключает рекламу и включает все категории закладок (Просмотрено, Запланировано, Продолжить и т.д.) без аккаунта CUB
 // @author       user
-// @version      1.2
+// @version      1.3
 // ==/LampaPlugin==
 
 (function () {
@@ -10,12 +10,12 @@
 
     const category$2 = ['like', 'wath', 'book', 'history', 'look', 'viewed', 'scheduled', 'continued', 'thrown'];
 
-    // Настройки
+    // === Настройки ===
     window.lampa_settings = window.lampa_settings || {};
     window.lampa_settings.account_use = true;
     window.lampa_settings.account_sync = false;
 
-    // Отключить рекламу
+    // === Отключить рекламу ===
     function disableAds() {
         if (typeof Lampa !== 'undefined' && Lampa.Preroll) {
             Lampa.Preroll.show = function (data, callback) {
@@ -24,7 +24,7 @@
         }
     }
 
-    // Включить Permit.sync = true
+    // === Включить Permit.sync ===
     function enableSync() {
         if (typeof Account$1 !== 'undefined' && Account$1.Permit) {
             Object.defineProperty(Account$1.Permit, 'sync', {
@@ -34,12 +34,11 @@
         }
     }
 
-    // Патч Favorite для локальной поддержки всех категорий
+    // === Патч Favorite: поддержка всех категорий локально ===
     function patchFavorite() {
-        if (typeof Favorite === 'undefined' || typeof Favorite.check !== 'function') return;
+        if (typeof Favorite === 'undefined') return;
 
         const originalCheck = Favorite.check;
-
         Favorite.check = function (card) {
             const result = originalCheck.call(this, card);
             const all = Favorite.all();
@@ -48,7 +47,6 @@
             category$2.forEach(type => {
                 result[type] = all[type] ? all[type].includes(id) : false;
             });
-
             return result;
         };
 
@@ -83,18 +81,64 @@
         };
     }
 
-    // Инициализация
+    // === Патч: принудительно показывать все вкладки в "Избранное" ===
+    function patchBookmarkTabs() {
+        if (typeof component$2 === 'undefined') return;
+
+        const original = component$2;
+        window.component$2 = function (object) {
+            const comp = original(object);
+
+            const origOnCreate = comp.onCreate;
+            comp.onCreate = function () {
+                origOnCreate.call(this);
+
+                const tabs = this.render().find('.bookmark__menu');
+                if (tabs.length && tabs.children().length <= 4) {
+                    tabs.empty();
+                    const allTabs = ['book', 'like', 'wath', 'history', 'viewed', 'scheduled', 'continued', 'thrown'];
+
+                    allTabs.forEach(type => {
+                        const title = Lang.translate('menu_' + type) || type;
+                        const tab = $(`<div class="bookmark__tab selector" data-type="${type}"><span>${title}</span></div>`);
+                        tabs.append(tab);
+                    });
+
+                    tabs.find('.bookmark__tab').on('hover:enter', function () {
+                        const type = $(this).data('type');
+                        Lampa.Activity.replace({
+                            component: 'favorite',
+                            type: type,
+                            title: Lang.translate('menu_' + type) || type
+                        });
+                    });
+
+                    tabs.find('.bookmark__tab').first().addClass('active');
+                }
+            };
+
+            return comp;
+        };
+    }
+
+    // === Инициализация ===
     function init() {
-        if (typeof Lampa === 'undefined' || typeof Account$1 === 'undefined' || typeof Favorite === 'undefined') {
-            setTimeout(init, 300);
+        if (
+            typeof Lampa === 'undefined' ||
+            typeof Account$1 === 'undefined' ||
+            typeof Favorite === 'undefined' ||
+            typeof component$2 === 'undefined'
+        ) {
+            setTimeout(init, 500);
             return;
         }
 
         disableAds();
         enableSync();
         patchFavorite();
+        patchBookmarkTabs();
 
-        console.log('✅ Плагин активирован: реклама отключена, все закладки доступны');
+        console.log('✅ Плагин активирован: реклама отключена, все закладки включены');
     }
 
     init();
