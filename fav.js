@@ -1,19 +1,19 @@
 // ==LampaPlugin==
-// @name         Без рекламы + все закладки (локально)
-// @description  Отключает рекламу и включает ВСЕ категории закладок без аккаунта CUB
+// @name         Все закладки + без рекламы (локально)
+// @description  Полный доступ ко всем категориям закладок без аккаунта CUB и без рекламы
 // @author       user
-// @version      1.4
+// @version      1.5
 // ==/LampaPlugin==
 
 (function () {
     'use strict';
 
-    // === 1. Настройки ===
+    // === Настройки ===
     window.lampa_settings = window.lampa_settings || {};
     window.lampa_settings.account_use = true;
     window.lampa_settings.account_sync = false;
 
-    // === 2. Отключить рекламу ===
+    // === Отключить рекламу ===
     function disableAds() {
         if (typeof Lampa !== 'undefined' && Lampa.Preroll) {
             Lampa.Preroll.show = function (data, callback) {
@@ -22,29 +22,34 @@
         }
     }
 
-    // === 3. Обход проверок CUB ===
-    function bypassCubChecks() {
-        if (typeof Account$1 === 'undefined') return;
+    // === Подделать аккаунт CUB ===
+    function fakeAccount() {
+        if (typeof Account$1 === 'undefined' || typeof Account$1.Permit === 'undefined') return;
 
-        // Включаем sync
-        Object.defineProperty(Account$1.Permit, 'sync', {
-            get: () => true,
-            configurable: true
-        });
+        // Токен — обязателен (иначе "ещё нет аккаунта")
+        Account$1.Permit.token = 'fake_token_12345';
 
-        // Подменяем hasPremium()
-        Account$1.hasPremium = function () {
-            return 1; // как будто есть премиум
+        // Пользователь
+        Account$1.Permit.user = {
+            id: 12345,
+            profile: { id: 12345 },
+            premium: 1,
+            name: 'Guest'
         };
 
-        // Блокируем модальные окна
+        // Premium
+        Account$1.hasPremium = function () { return 1; };
+        Account$1.status = function () { return true; };
+        Account$1.logined = function () { return true; };
+
+        // Блокировка модалок
         Account$1.showCubPremium = function () {};
         Account$1.Modal = { account: () => {}, premium: () => {} };
 
-        console.log('✅ Обход CUB: sync=true, hasPremium=1, модалки отключены');
+        console.log('✅ Фейковый CUB-аккаунт активирован');
     }
 
-    // === 4. Инициализация ===
+    // === Инициализация ===
     function init() {
         if (typeof Lampa === 'undefined' || typeof Account$1 === 'undefined') {
             setTimeout(init, 500);
@@ -52,9 +57,9 @@
         }
 
         disableAds();
-        bypassCubChecks();
+        fakeAccount();
 
-        console.log('✨ Плагин активирован: реклама отключена, все закладки доступны');
+        console.log('✨ Плагин готов: закладки и без рекламы');
     }
 
     init();
