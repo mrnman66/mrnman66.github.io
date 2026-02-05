@@ -54,7 +54,7 @@
                 // WebOS не имеет официального API для перезапуска, но можно закрыть и открыть заново (или перезагрузить страницу)
                 window.location.reload();
             } else if (Lampa.Platform.is("android")) {
-                Lampa.Android.reload();
+                window.location.reload();
             } else if (Lampa.Platform.is("orsay")) {
                 // Orsay: нет стандартного метода перезагрузки, делаем reload
                 window.location.reload();
