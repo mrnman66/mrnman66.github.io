@@ -1,13 +1,13 @@
-// Quick Reload Button for Lampa Header (Perfect Match)
+// Quick Reload Button for Lampa Header (Mobile-Optimized)
 (function () {
     "use strict";
 
     if (window.plugin_header_reload_ready) return;
     window.plugin_header_reload_ready = true;
 
-    // Чистая иконка с заливкой (как системные), фиксированный размер 24x24
+    // Масштабируемая иконка без фиксированных размеров
     const reloadIconSVG = 
-        '<svg viewBox="0 0 24 24" width="24" height="24" style="display:block">' +
+        '<svg viewBox="0 0 24 24" style="display:block; width:100%; height:100%;">' +
         '<path fill="currentColor" d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>' +
         '</svg>';
 
@@ -15,7 +15,7 @@
         const $actions = $(".head__actions");
         if (!$actions.length || $actions.find('[data-action="header-reload"]').length) return;
 
-        // Создаём элемент БЕЗ инлайновых стилей — как системные иконки
+        // Создаём элемент БЕЗ инлайновых стилей — полагаемся на стили Lampa
         const $reloadBtn = $(
             '<div class="head__action selector" data-action="header-reload">' +
             reloadIconSVG +
@@ -47,22 +47,16 @@
 
         $actions.prepend($reloadBtn);
         
-        // ТОЧЕЧНАЯ КОРРЕКЦИЯ ТОЛЬКО ДЛЯ МОБИЛЬНЫХ (Android и др.)
+        // Дополнительная коррекция для мобильных: если иконка всё ещё мала
         if (Lampa.Platform.screen('mobile')) {
-            const $refIcon = $actions.find('.head__action').not('[data-action="header-reload"]').first();
+            // Принудительно наследуем размеры от соседних иконок
+            const $refIcon = $actions.find('.head__action').eq(1);
             if ($refIcon.length) {
-                // Копируем ТОЛЬКО размеры контейнера, не трогая внутреннюю иконку
-                const refWidth = $refIcon.outerWidth();
-                const refHeight = $refIcon.outerHeight();
-                
+                const size = Math.max($refIcon.outerWidth(), $refIcon.outerHeight());
                 $reloadBtn.css({
-                    'width': refWidth + 'px',
-                    'height': refHeight + 'px',
-                    'min-width': refWidth + 'px',
-                    'min-height': refHeight + 'px',
-                    'display': 'flex',
-                    'align-items': 'center',
-                    'justify-content': 'center'
+                    'width': size + 'px',
+                    'height': size + 'px',
+                    'min-width': size + 'px'
                 });
             }
         }
@@ -79,13 +73,6 @@
         
         Lampa.Listener.follow("toggle", function (e) {
             if (e.name === "main") {
-                setTimeout(addReloadButton, 100);
-            }
-        });
-        
-        // Перекалибровка при изменении размера (поворот экрана)
-        Lampa.Listener.follow("resize_end", function () {
-            if (Lampa.Activity.active().name === 'main' && Lampa.Platform.screen('mobile')) {
                 setTimeout(addReloadButton, 100);
             }
         });
