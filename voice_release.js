@@ -393,38 +393,28 @@
         var alreadyTracked = tracking.find(function(t) {
             return t.kinopoisk_id == card.kinopoisk_id || t.imdb_id == card.imdb_id;
         });
-        console.log('[VoiceRelease] Уже отслеживается:', !!alreadyTracked);
+        console.log('[VoiceRelease] Уже отслеживается:', !!alreadyTracked, alreadyTracked ? '(' + alreadyTracked.voice + ')' : '');
 
-        // Если render не найден, пробуем найти через DOM
-        if (!render) {
-            console.log('[VoiceRelease] Render не найден, пробуем найти через DOM');
-            render = $('.card__title, .info__title').first().closest('.layer, .activity-content');
-        }
-
-        if (alreadyTracked) {
-            // Уже отслеживается - показываем кнопку "Удалить"
-            console.log('[VoiceRelease] Показываем кнопку "Удалить"');
-            addRemoveButton(render, alreadyTracked, card);
-        } else {
-            // Не отслеживается - показываем кнопку "Добавить"
-            console.log('[VoiceRelease] Показываем кнопку "Отслеживать"');
-            addAddButton(render, card);
-        }
+        // Показываем кнопку "Отслеживать" (всегда одну и ту же)
+        console.log('[VoiceRelease] Показываем кнопку "Отслеживать"');
+        addTrackButtonInternal(render, card, alreadyTracked);
     }
 
-    function addAddButton(render, card) {
-        console.log('[VoiceRelease] addAddButton вызвана, render:', !!render, 'card:', card.title);
-        
+    function addTrackButtonInternal(render, card, alreadyTracked) {
         // Удаляем старую кнопку если есть
         $('.voice-release-track-btn, .button--voice-release').remove();
 
-        // Создаём кнопку в стиле кнопок Lampa (как "Смотреть", "Избранное")
-        var button = $('<div class="full-start__button selector button--voice-release">' +
+        // Определяем текст и статус кнопки
+        var buttonText = alreadyTracked ? 'Отслеживать ✓' : 'Отслеживать';
+        var buttonClass = alreadyTracked ? 'button--voice-release tracked' : 'button--voice-release';
+
+        // Создаём кнопку в стиле кнопок Lampa
+        var button = $('<div class="full-start__button selector ' + buttonClass + '">' +
             '<svg width="24" height="32" viewBox="0 0 25 30" fill="none" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M6.01892 24C6.27423 27.3562 9.07836 30 12.5 30C15.9216 30 18.7257 27.3562 18.981 24H15.9645C15.7219 25.6961 14.2632 27 12.5 27C10.7367 27 9.27804 25.6961 9.03542 24H6.01892Z" fill="currentColor"/>' +
             '<path d="M3.81972 14.5957V10.2679C3.81972 5.41336 7.7181 1.5 12.5 1.5C17.2819 1.5 21.1803 5.41336 21.1803 10.2679V14.5957C21.1803 15.8462 21.5399 17.0709 22.2168 18.1213L23.0727 19.4494C24.2077 21.2106 22.9392 23.5 20.9098 23.5H4.09021C2.06084 23.5 0.792282 21.2106 1.9273 19.4494L2.78317 18.1213C3.46012 17.0709 3.81972 15.8462 3.81972 14.5957Z" stroke="currentColor" stroke-width="2.6"/>' +
             '</svg>' +
-            '<span>Отслеживать</span>' +
+            '<span>' + buttonText + (alreadyTracked ? ' (' + alreadyTracked.voice + ')' : '') + '</span>' +
             '</div>');
 
         // Обработчики событий Lampa
@@ -450,69 +440,13 @@
             
             if (playButton.length) {
                 playButton.after(button);
-                console.log('[VoiceRelease] Кнопка "Отслеживать" добавлена после кнопки "Смотреть"');
+                console.log('[VoiceRelease] Кнопка "' + buttonText + '" добавлена после кнопки "Смотреть"');
             } else {
                 buttonsContainer.append(button);
-                console.log('[VoiceRelease] Кнопка "Отслеживать" добавлена в конец блока кнопок');
+                console.log('[VoiceRelease] Кнопка "' + buttonText + '" добавлена в конец блока кнопок');
             }
-            
-            // Проверяем, видима ли кнопка
-            setTimeout(function() {
-                console.log('[VoiceRelease] Кнопка в DOM:', $('.button--voice-release').length);
-                console.log('[VoiceRelease] Кнопка видима:', $('.button--voice-release').is(':visible'));
-            }, 500);
         } else {
             console.log('[VoiceRelease] Не найден контейнер кнопок');
-            console.log('[VoiceRelease] .full-start-new__buttons:', $('.full-start-new__buttons', render).length);
-            console.log('[VoiceRelease] .full-start__buttons:', $('.full-start__buttons', render).length);
-            console.log('[VoiceRelease] .buttons--container:', $('.buttons--container', render).length);
-        }
-    }
-
-    function addRemoveButton(render, trackedItem, card) {
-        // Удаляем старую кнопку если есть
-        $('.voice-release-track-btn', render).remove();
-
-        var button = $('<div class="voice-release-track-btn" style="' +
-            'display: inline-flex; ' +
-            'align-items: center; ' +
-            'justify-content: center; ' +
-            'padding: 12px 24px; ' +
-            'background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); ' +
-            'border-radius: 8px; ' +
-            'color: white; ' +
-            'font-size: 14px; ' +
-            'font-weight: 600; ' +
-            'cursor: pointer; ' +
-            'margin: 15px 10px 15px 0; ' +
-            '">' +
-            '❌ Отключить отслеживание' +
-            '</div>');
-
-        button.on('hover:enter', function() {
-            button.css('transform', 'scale(1.05)');
-        }).on('hover:leave', function() {
-            button.css('transform', 'scale(1)');
-        }).on('hover:click', function() {
-            Lampa.Confirm.open({
-                title: 'Отключить отслеживание',
-                text: 'Вы действительно хотите отключить отслеживание сериала<br><b>' +
-                      (trackedItem.title || card.title) + '</b>?',
-                onConfirm: function() {
-                    removeTracking(trackedItem.kinopoisk_id);
-                    button.remove();
-                    Lampa.Noty.show({
-                        title: 'Отслеживание отключено',
-                        time: 3000
-                    });
-                }
-            });
-        });
-
-        // Добавляем кнопку после заголовка
-        var title = $('.card__title, .info__title', render).first();
-        if (title.length) {
-            title.after(button);
         }
     }
 
@@ -521,44 +455,66 @@
     // ============================================
     function showVoiceSelector(card) {
         var voices = CONFIG.VOICES;
+        
+        // Проверяем, есть ли уже выбранная озвучка для этого сериала
+        var tracking = getTracking();
+        var existingItem = tracking.find(function(t) {
+            return t.kinopoisk_id == card.kinopoisk_id || t.imdb_id == card.imdb_id;
+        });
+        var currentVoice = existingItem ? existingItem.voice : null;
+        
+        console.log('[VoiceRelease] showVoiceSelector, текущая озвучка:', currentVoice);
 
         var items = [];
         voices.forEach(function(voice) {
             items.push({
                 title: voice,
-                voice: voice
+                subtitle: voice == currentVoice ? '✓ Отслеживается' : '',
+                voice: voice,
+                isCurrent: voice == currentVoice
             });
         });
 
         Lampa.Select.show({
-            title: 'Выберите озвучку для отслеживания',
-            description: card.title,
+            title: 'Отслеживание сериала',
+            description: card.title + '\nНажмите на озвучку, чтобы отслеживать или снять с отслеживания',
             items: items,
             onSelect: function(item) {
                 if (!item || !item.voice) return;
 
-                // Сохраняем в отслеживаемые
-                var trackingData = {
-                    kinopoisk_id: card.kinopoisk_id,
-                    imdb_id: card.imdb_id,
-                    title: card.title || card.name || card.original_title,
-                    original_title: card.original_title,
-                    poster: card.poster,
-                    voice: item.voice,
-                    provider: null,  // Будет определён при первой проверке
-                    last_episode: null,
-                    last_check: Date.now(),
-                    has_new_episode: false,
-                    added_at: Date.now()
-                };
+                if (item.isCurrent) {
+                    // Уже отслеживается - удаляем из отслеживания
+                    removeTracking(card.kinopoisk_id);
+                    
+                    Lampa.Noty.show({
+                        title: '❌ Отслеживание отключено',
+                        description: 'Сериал "' + card.title + '" удалён из списка отслеживаемых',
+                        time: 4000
+                    });
+                } else {
+                    // Ещё не отслеживается - добавляем
+                    var trackingData = {
+                        kinopoisk_id: card.kinopoisk_id,
+                        imdb_id: card.imdb_id,
+                        title: card.title || card.name || card.original_title,
+                        original_title: card.original_title,
+                        poster: card.poster,
+                        voice: item.voice,
+                        provider: null,
+                        last_episode: null,
+                        last_check: Date.now(),
+                        has_new_episode: false,
+                        added_at: Date.now()
+                    };
 
-                saveTracking(trackingData);
+                    saveTracking(trackingData);
 
-                Lampa.Noty.show({
-                    title: '✅ Отслеживание включено',
-                    description: 'Сериал "' + card.title + '" добавлен в список отслеживаемых',
-                    time: 4000
-                });
+                    Lampa.Noty.show({
+                        title: '✅ Отслеживание включено',
+                        description: 'Сериал "' + card.title + '" (' + item.voice + ') добавлен в список отслеживаемых',
+                        time: 4000
+                    });
+                }
 
                 // Перерисовываем кнопку
                 setTimeout(function() {
