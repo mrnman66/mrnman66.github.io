@@ -596,12 +596,15 @@
             return;
         }
 
-        // Создаём кнопку меню
+        // Создаём кнопку меню с иконкой как в стандарте Lampa
         var button = $('<li class="menu__item selector">' +
             '<div class="menu__ico">' +
-            '<svg width="200" height="243" viewBox="0 0 200 243" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-            '<path d="M100 0C44.8 0 0 44.8 0 100C0 155.2 44.8 200 100 200C155.2 200 200 155.2 200 100C200 44.8 155.2 0 100 0ZM100 180C55.9 180 20 144.1 20 100C20 55.9 55.9 20 100 20C144.1 20 180 55.9 180 100C180 144.1 144.1 180 100 180Z" fill="white"/>' +
-            '<path d="M100 50C72.4 50 50 72.4 50 100C50 127.6 72.4 150 100 150C127.6 150 150 127.6 150 100C150 72.4 127.6 50 100 50ZM100 130C83.5 130 70 116.5 70 100C70 83.5 83.5 70 100 70C116.5 70 130 83.5 130 100C130 116.5 116.5 130 100 130Z" fill="white"/>' +
+            '<svg width="39" height="39" viewBox="0 0 39 39" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<rect x="1.85742" y="13.0947" width="35.501" height="23.9331" rx="4.5" stroke="currentColor" stroke-width="3"/>' +
+            '<rect x="4.72461" y="5.90186" width="29.7656" height="3.01074" rx="1.50537" fill="currentColor"/>' +
+            '<rect x="7.55957" y="0.208984" width="24.0957" height="3.01074" rx="1.50537" fill="currentColor"/>' +
+            '<rect x="23.3701" y="18.9653" width="3.06348" height="12.3091" rx="1.53174" transform="rotate(30 23.3701 18.9653)" fill="currentColor"/>' +
+            '<rect x="13.1934" y="25.2788" width="3.06348" height="8.31331" rx="1.53174" transform="rotate(-45 13.1934 25.2788)" fill="currentColor"/>' +
             '</svg>' +
             '</div>' +
             '<div class="menu__text">Подписки</div>' +
@@ -610,7 +613,7 @@
         // Обработчик нажатия
         button.on('hover:enter', function() {
             console.log('[VoiceRelease] Открытие подписок');
-            showSubscriptionsMenu();
+            showSubscriptionsPage();
         });
 
         // Добавляем кнопку в меню (после последнего элемента)
@@ -623,110 +626,134 @@
         }
     }
 
-    function showSubscriptionsMenu() {
+    // ============================================
+    // СТРАНИЦА ПОДПИСОК (как в стандарте Lampa)
+    // ============================================
+    function showSubscriptionsPage() {
         var tracking = getTracking();
         var notifications = getNotifications();
 
-        // Создаём элементы меню
+        // Создаём массив элементов в формате Lampa Card
         var items = [];
 
-        // Раздел: Отслеживаемые сериалы
-        items.push({
-            title: '📺 Отслеживаемые сериалы',
-            type: 'header',
-            disabled: true
-        });
-
-        if (tracking.length === 0) {
+        // Добавляем отслеживаемые сериалы
+        tracking.forEach(function(t) {
+            var status = t.last_episode ?
+                'S' + t.last_episode.season + ':E' + t.last_episode.episode :
+                'Ожидание...';
+            
             items.push({
-                title: 'Нет отслеживаемых сериалов',
-                subtitle: 'Добавьте сериал через кнопку на странице',
-                disabled: true
+                kinopoisk_id: t.kinopoisk_id,
+                imdb_id: t.imdb_id,
+                title: t.title,
+                original_title: t.original_title,
+                poster: t.poster,
+                source: 'tmdb',
+                voice_release: {
+                    status: 1,
+                    season: t.last_episode ? t.last_episode.season : 0,
+                    episode: t.last_episode ? t.last_episode.episode : 0,
+                    voice: t.voice
+                }
             });
-        } else {
-            tracking.forEach(function(t) {
-                var status = t.last_episode ?
-                    'S' + t.last_episode.season + ':E' + t.last_episode.episode :
-                    'Ожидание...';
-                items.push({
-                    title: t.title,
-                    subtitle: t.voice + ' • ' + status,
-                    kinopoisk_id: t.kinopoisk_id,
-                    url: 'full/' + t.kinopoisk_id,
-                    action: 'open'
-                });
-            });
-        }
-
-        // Раздел: Уведомления
-        items.push({
-            title: '',
-            type: 'separator'
         });
 
-        items.push({
-            title: '🔔 Последние уведомления',
-            type: 'header',
-            disabled: true
-        });
-
-        if (notifications.length === 0) {
-            items.push({
-                title: 'Нет новых уведомлений',
-                disabled: true
-            });
-        } else {
-            notifications.slice(0, 10).forEach(function(n) {
-                items.push({
-                    title: n.title,
-                    subtitle: 'S' + n.season + ':E' + n.episode + ' • ' + n.voice,
-                    kinopoisk_id: n.kinopoisk_id,
-                    url: 'full/' + n.kinopoisk_id,
-                    action: 'open'
-                });
-            });
-        }
-
-        // Открываем меню с элементами
-        Lampa.Select.show({
+        // Открываем страницу с карточками
+        Lampa.Activity.push({
+            url: 'voice_release_subscriptions',
             title: 'Подписки',
-            items: items,
-            onSelect: function(item) {
-                if (item && item.action === 'open' && item.url) {
-                    Lampa.Activity.push({
-                        url: item.url,
-                        id: item.kinopoisk_id,
-                        type: 'full'
+            component: 'voice_subscriptions',
+            page: 1,
+            items: items
+        });
+
+        // Регистрируем компонент если ещё не зарегистрирован
+        if (!Lampa.Component.get('voice_subscriptions')) {
+            registerSubscriptionsComponent();
+        }
+    }
+
+    // ============================================
+    // РЕГИСТРАЦИЯ КОМПОНЕНТА ПОДПИСОК
+    // ============================================
+    function registerSubscriptionsComponent() {
+        var Component = {
+            onCreate: function() {
+                var _this = this;
+                var scroll = new Lampa.Scroll({
+                    step: 300,
+                    visible: 5
+                });
+
+                _this.html = $('<div class="full"></div>');
+                _this.scroll = scroll;
+
+                // Создаём сетку карточек
+                var cards = $('<div class="cards"></div>');
+                scroll.append(cards);
+                _this.html.append(scroll.render());
+
+                // Рендерим карточки
+                var items = _this.data.items || [];
+                items.forEach(function(item) {
+                    var card = createSubscriptionCard(item);
+                    cards.append(card);
+                });
+
+                // Пустое состояние
+                if (items.length === 0) {
+                    var empty = Lampa.Template.get('empty', {
+                        title: 'Нет отслеживаемых сериалов',
+                        descr: 'Добавьте сериал через кнопку на странице'
                     });
-                }
-            },
-            onContextMenu: function(item, element, callback) {
-                // Контекстное меню для отслеживаемых
-                if (!item || !item.kinopoisk_id || item.disabled) {
-                    if (callback) callback();
-                    return;
+                    cards.append(empty);
                 }
 
-                Lampa.Confirm.open({
-                    title: 'Отключить отслеживание',
-                    text: 'Вы действительно хотите отключить отслеживание сериала "' + item.title + '"?',
-                    onConfirm: function() {
-                        removeTracking(item.kinopoisk_id);
-                        showSubscriptionsMenu();  // Обновляем меню
-                        Lampa.Noty.show({
-                            title: 'Удалено из отслеживаемых',
-                            time: 3000
-                        });
-                    },
-                    onCancel: function() {
-                        if (callback) callback();
+                Lampa.Controller.add('subscriptions_cards', {
+                    toggle: function() {
+                        Lampa.Controller.collectionFocus(cards.find('.card').first(), cards);
                     }
                 });
+
+                Lampa.Controller.toggle('subscriptions_cards');
             },
-            onBack: function() {
-                Lampa.Controller.toggle('menu');
+            onDestroy: function() {
+                this.html.remove();
+                this.scroll.destroy();
             }
+        };
+
+        Lampa.Component.add('voice_subscriptions', Component);
+    }
+
+    // ============================================
+    // СОЗДАНИЕ КАРТОЧКИ ПОДПИСКИ (как в Lampa)
+    // ============================================
+    function createSubscriptionCard(item) {
+        var card = Lampa.Template.get('card', item, true);
+        card.addClass('card--voice-release');
+
+        // Добавляем бейдж с информацией о подписке
+        if (item.voice_release) {
+            var badge = $('<div class="card__subscribe">' +
+                '<div class="card__subscribe-status on"></div>' +
+                '<div class="card__subscribe-position">S' + item.voice_release.season + ':E' + item.voice_release.episode + '</div>' +
+                '<div class="card__subscribe-voice">' + item.voice_release.voice + '</div>' +
+                '</div>');
+            card.find('.card__view').after(badge);
+        }
+
+        // Обработчик нажатия
+        card.on('hover:enter', function() {
+            Lampa.Activity.push({
+                url: 'full/' + item.kinopoisk_id,
+                id: item.kinopoisk_id,
+                type: 'full',
+                source: item.source
+            });
         });
+
+        return card;
     }
 
     // ============================================
@@ -869,10 +896,10 @@
             checkNow: checkNewEpisodes,
 
             // Показать подписки (главное меню)
-            showSubscriptions: showSubscriptionsMenu,
+            showSubscriptions: showSubscriptionsPage,
 
             // Версия плагина
-            version: '1.1.0'
+            version: '1.2.0'
         };
 
         console.log('[VoiceRelease] Plugin initialized successfully!');
