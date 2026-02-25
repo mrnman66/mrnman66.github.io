@@ -412,44 +412,67 @@
     }
 
     function addAddButton(render, card) {
+        console.log('[VoiceRelease] addAddButton вызвана, render:', !!render, 'card:', card.title);
+        
         // Удаляем старую кнопку если есть
-        $('.voice-release-track-btn', render).remove();
+        $('.voice-release-track-btn').remove();
 
-        var button = $('<div class="voice-release-track-btn" style="' +
-            'display: inline-flex; ' +
+        // Создаём кнопку в стиле кнопок Lampa (как "Смотреть", "Избранное")
+        var button = $('<div class="full-start__button selector button--voice-release" style="' +
+            'display: flex; ' +
             'align-items: center; ' +
             'justify-content: center; ' +
-            'padding: 12px 24px; ' +
-            'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); ' +
+            'padding: 12px 20px; ' +
+            'background: rgba(255,255,255,0.1); ' +
             'border-radius: 8px; ' +
             'color: white; ' +
             'font-size: 14px; ' +
             'font-weight: 600; ' +
             'cursor: pointer; ' +
-            'margin: 15px 10px 15px 0; ' +
-            'transition: transform 0.2s, box-shadow 0.2s; ' +
+            'transition: background 0.2s; ' +
             '">' +
-            '🔔 Отслеживать выход серий' +
+            '<svg width="20" height="20" viewBox="0 0 25 30" fill="none" style="margin-right: 8px;">' +
+            '<path d="M6.01892 24C6.27423 27.3562 9.07836 30 12.5 30C15.9216 30 18.7257 27.3562 18.981 24H15.9645C15.7219 25.6961 14.2632 27 12.5 27C10.7367 27 9.27804 25.6961 9.03542 24H6.01892Z" fill="currentColor"/>' +
+            '<path d="M3.81972 14.5957V10.2679C3.81972 5.41336 7.7181 1.5 12.5 1.5C17.2819 1.5 21.1803 5.41336 21.1803 10.2679V14.5957C21.1803 15.8462 21.5399 17.0709 22.2168 18.1213L23.0727 19.4494C24.2077 21.2106 22.9392 23.5 20.9098 23.5H4.09021C2.06084 23.5 0.792282 21.2106 1.9273 19.4494L2.78317 18.1213C3.46012 17.0709 3.81972 15.8462 3.81972 14.5957Z" stroke="currentColor" stroke-width="2.6"/>' +
+            '</svg>' +
+            'Отслеживать' +
             '</div>');
 
         button.on('hover:enter', function() {
-            button.css({
-                'transform': 'scale(1.05)',
-                'box-shadow': '0 4px 15px rgba(102, 126, 234, 0.4)'
-            });
+            console.log('[VoiceRelease] Hover на кнопке');
+            button.css('background', 'rgba(255,255,255,0.15)');
         }).on('hover:leave', function() {
-            button.css({
-                'transform': 'scale(1)',
-                'box-shadow': 'none'
-            });
+            button.css('background', 'rgba(255,255,255,0.1)');
         }).on('hover:click', function() {
+            console.log('[VoiceRelease] Клик на кнопке');
             showVoiceSelector(card);
         });
 
-        // Добавляем кнопку после заголовка
-        var title = $('.card__title, .info__title', render).first();
-        if (title.length) {
-            title.after(button);
+        // Ищем блок с кнопками в карточке
+        var buttonsContainer = $('.full-start-new__buttons, .full-start__buttons, .buttons--container', render).first();
+        console.log('[VoiceRelease] Найдено контейнер кнопок:', buttonsContainer.length);
+        
+        if (buttonsContainer.length) {
+            buttonsContainer.append(button);
+            console.log('[VoiceRelease] Кнопка "Отслеживать" добавлена в блок кнопок');
+            
+            // Проверяем, видима ли кнопка
+            setTimeout(function() {
+                console.log('[VoiceRelease] Кнопка в DOM:', $('.button--voice-release').length);
+                console.log('[VoiceRelease] Кнопка видима:', $('.button--voice-release').is(':visible'));
+            }, 500);
+        } else {
+            console.log('[VoiceRelease] Не найден контейнер кнопок');
+            console.log('[VoiceRelease] .full-start-new__buttons:', $('.full-start-new__buttons', render).length);
+            console.log('[VoiceRelease] .full-start__buttons:', $('.full-start__buttons', render).length);
+            console.log('[VoiceRelease] .buttons--container:', $('.buttons--container', render).length);
+            
+            // Резервный вариант - добавляем после заголовка
+            var title = $('.card__title, .info__title, .full-start-new__title', render).first();
+            if (title.length) {
+                title.after(button);
+                console.log('[VoiceRelease] Кнопка добавлена после заголовка (резервный вариант)');
+            }
         }
     }
 
