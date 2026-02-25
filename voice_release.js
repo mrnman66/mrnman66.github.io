@@ -378,8 +378,8 @@
             return;
         }
 
-        // Проверяем, сериал ли это
-        var isSeries = card.type == 'tv' || card.number_of_seasons > 0;
+        // Проверяем, сериал ли это (разные типы в Lampa)
+        var isSeries = card.type == 'tv' || card.type == 'Scripted' || card.number_of_seasons > 0;
         console.log('[VoiceRelease] Это сериал:', isSeries, 'type:', card.type);
         
         if (!isSeries) {
@@ -615,9 +615,9 @@
     function addSubscriptionsMenuItem() {
         console.log('[VoiceRelease] addSubscriptionsMenuItem вызвана');
         
-        // Проверяем, есть ли уже наш пункт
-        if ($('.menu__item:contains("Подписки")').length > 0) {
-            console.log('[VoiceRelease] Пункт "Подписки" уже есть в меню');
+        // Проверяем, есть ли уже наш пункт (ищем по уникальному названию)
+        if ($('.menu__item:contains("Мои подписки")').length > 0) {
+            console.log('[VoiceRelease] Пункт "Мои подписки" уже есть в меню');
             return;
         }
 
@@ -634,7 +634,7 @@
             '<rect x="13.1934" y="25.2788" width="3.06348" height="8.31331" rx="1.53174" transform="rotate(-45 13.1934 25.2788)" fill="currentColor"/>' +
             '</svg>' +
             '</div>' +
-            '<div class="menu__text">Подписки</div>' +
+            '<div class="menu__text">Мои подписки</div>' +
             '</li>');
 
         // Обработчик нажатия
@@ -649,7 +649,7 @@
         
         if (menuList.length) {
             menuList.append(button);
-            console.log('[VoiceRelease] Пункт "Подписки" добавлен в меню');
+            console.log('[VoiceRelease] Пункт "Мои подписки" добавлен в меню');
         } else {
             console.log('[VoiceRelease] Не найдено меню для добавления');
             console.log('[VoiceRelease] Пробуем найти .menu:', $('.menu').length);
@@ -942,7 +942,7 @@
             showSubscriptions: showSubscriptionsPage,
 
             // Версия плагина
-            version: '1.2.0'
+            version: '1.2.1'
         };
 
         console.log('[VoiceRelease] Plugin initialized successfully!');
