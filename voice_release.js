@@ -560,7 +560,7 @@
     }
 
     // ============================================
-    // РЕГИСТРАЦИЯ КОМПОНЕНТА ПОДПИСОК
+    // РЕГИСТРАЦИЯ КОМПОНЕНТА ПОДПИСОК (в стиле Lampa Timetable)
     // ============================================
     function registerSubscriptionsComponent() {
         console.log('[VoiceRelease] registerSubscriptionsComponent вызвана');
@@ -569,40 +569,27 @@
         function SubscriptionsComponent(data) {
             var _this = this;
             _this.data = data;
-            _this.activity = null;
             _this.items = data.items || [];
             _this.html = null;
+            _this.scroll = null;
             
             console.log('[VoiceRelease] SubscriptionsComponent constructor, items:', _this.items.length);
             
             _this.create = function() {
                 console.log('[VoiceRelease] SubscriptionsComponent create вызвана');
                 
-                // Добавляем стили для сетки карточек
-                if (!$('#voice-release-styles').length) {
-                    $('head').append('<style id="voice-release-styles">' +
-                        '.subscriptions-page .full { padding: 20px; }' +
-                        '.subscriptions-page .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }' +
-                        '.subscriptions-page .card { margin: 0; }' +
-                        '.subscriptions-page .card__subscribe { position: absolute; bottom: 10px; left: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 8px; border-radius: 6px; font-size: 12px; }' +
-                        '.subscriptions-page .card__subscribe-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; margin-right: 8px; }' +
-                        '.subscriptions-page .card__subscribe-position { display: block; color: #fff; margin-top: 4px; }' +
-                        '.subscriptions-page .card__subscribe-voice { display: block; color: #aaa; margin-top: 4px; }' +
-                        '</style>');
-                }
-                
-                var scroll = new Lampa.Scroll({
-                    step: 300,
-                    visible: 5
+                // Создаём прокрутку как в Lampa
+                _this.scroll = new Lampa.Scroll({
+                    mask: true,      // Маска сверху/снизу
+                    over: true,      // Поверх контента
+                    step: 300        // Шаг прокрутки
                 });
 
-                _this.html = $('<div class="full subscriptions-page"></div>');
-                _this.scroll = scroll;
+                _this.html = $('<div class="full"></div>');
+                var body = $('<div class="subscriptions"></div>');  // Контейнер как .timetable
 
-                // Создаём сетку карточек
-                var cards = $('<div class="cards"></div>');
-                scroll.append(cards);
-                _this.html.append(scroll.render());
+                _this.scroll.append(body);
+                _this.html.append(_this.scroll.render());
 
                 // Рендерим карточки
                 console.log('[VoiceRelease] Рендерим карточек:', _this.items.length);
@@ -610,13 +597,22 @@
                 if (_this.items.length > 0) {
                     _this.items.forEach(function(item) {
                         var card = createSubscriptionCard(item);
-                        cards.append(card);
+                        body.append(card);
                     });
+                } else {
+                    // Пустое состояние
+                    var empty = new Lampa.Empty({
+                        title: Lang.translate('timetable_empty') || 'Нет отслеживаемых сериалов',
+                        descr: 'Добавьте сериал через кнопку "Отслеживать" на странице сериала'
+                    });
+                    body.append(empty.render());
+                    _this.start = empty.start.bind(empty);
                 }
 
+                // Регистрируем контроллер
                 Lampa.Controller.add('subscriptions_cards', {
                     toggle: function() {
-                        Lampa.Controller.collectionFocus(cards.find('.card').first(), cards);
+                        Lampa.Controller.collectionFocus(body.find('.selector').first(), body);
                     }
                 });
 
@@ -657,21 +653,24 @@
     }
 
     // ============================================
-    // СОЗДАНИЕ КАРТОЧКИ ПОДПИСКИ
+    // СОЗДАНИЕ КАРТОЧКИ ПОДПИСКИ (в стиле Lampa Timetable)
     // ============================================
     function createSubscriptionCard(item) {
         console.log('[VoiceRelease] createSubscriptionCard:', item.title);
-        console.log('[VoiceRelease] Poster:', item.poster);
-        
-        // Исправляем URL постера если он относительный
-        var posterUrl = item.poster;
+
+        // Получаем полный URL постера
+        var posterUrl = item.poster || '';
         if (posterUrl && posterUrl.indexOf('http') !== 0 && posterUrl.indexOf('/') === 0) {
             posterUrl = 'https://image.tmdb.org/t/p/w500' + posterUrl;
         } else if (!posterUrl || posterUrl.indexOf('img_load') >= 0) {
             posterUrl = './img/img_load.svg';
         }
-        
-        // Создаём карточку вручную с правильными классами
+
+        // Создаём карточку в стиле timetable
+        var status = item.last_episode ?
+            'S' + item.last_episode.season + ':E' + item.last_episode.episode :
+            'Ожидание...';
+
         var card = $('<div class="card card--voice-release selector layer--visible layer--render">' +
             '<div class="card__imgbox">' +
             '<div class="card__view image--ready">' +
@@ -682,25 +681,12 @@
             '<div class="card__title">' + item.title + '</div>' +
             '<div class="card__age"></div>' +
             '</div>' +
-            '</div>');
-
-        // Добавляем бейдж с информацией о подписке
-        var status = item.last_episode ?
-            'S' + item.last_episode.season + ':E' + item.last_episode.episode :
-            'Ожидание...';
-        
-        var badge = $('<div class="card__subscribe">' +
+            '<div class="card__subscribe">' +
             '<div class="card__subscribe-status on"></div>' +
             '<div class="card__subscribe-position">' + status + '</div>' +
             '<div class="card__subscribe-voice">' + item.voice + '</div>' +
+            '</div>' +
             '</div>');
-        
-        var cardView = card.find('.card__view');
-        if (cardView.length) {
-            cardView.after(badge);
-        } else {
-            card.append(badge);
-        }
 
         // Обработчик нажатия
         card.on('hover:enter', function() {
@@ -873,7 +859,7 @@
             showSubscriptions: showSubscriptionsPage,
 
             // Версия плагина
-            version: '1.3.0'
+            version: '1.4.0'
         };
 
         console.log('[VoiceRelease] Plugin initialized successfully!');
