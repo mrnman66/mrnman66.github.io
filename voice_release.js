@@ -676,6 +676,7 @@
             _this.data = data;
             _this.activity = null;
             _this.items = data.items || [];
+            _this.html = null;
             
             console.log('[VoiceRelease] SubscriptionsComponent constructor, items:', _this.items.length);
             
@@ -716,6 +717,14 @@
                 return _this.html;
             };
             
+            _this.render = function() {
+                console.log('[VoiceRelease] SubscriptionsComponent render вызвана');
+                if (!_this.html) {
+                    return _this.create();
+                }
+                return _this.html;
+            };
+            
             _this.start = function() {
                 console.log('[VoiceRelease] SubscriptionsComponent start');
             };
@@ -730,8 +739,8 @@
             
             _this.destroy = function() {
                 console.log('[VoiceRelease] SubscriptionsComponent destroy');
-                _this.html.remove();
-                _this.scroll.destroy();
+                if (_this.html) _this.html.remove();
+                if (_this.scroll) _this.scroll.destroy();
             };
         }
 
