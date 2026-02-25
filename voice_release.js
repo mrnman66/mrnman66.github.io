@@ -24,9 +24,14 @@
             'SovietRomance', 'M603', 'AniStar', 'Tunel', 'Flarrow Films',
             'HDrezka', 'Rezka', 'Filmix', 'Kinobase', 'Lumex'
         ],
-        // Настройки отображения иконок
-        SHOW_NOTIFICATION_ICON: false,  // Скрыть - используем стандартный центр уведомлений Lampa
-        SHOW_TRACKING_ICON: true        // Показывать иконку 📺 для списка отслеживаемых
+        // Настройки плагина
+        PROVIDERS: ['lumex', 'kodik', 'collaps'],  // Балансёры для проверки
+        VOICES: [  // Известные озвучки для автоопределения
+            'AniLibria', 'AniLibria TV', 'Studio Band', 'SHIZA Project', 'DreamCast',
+            'JAM Club', 'AnimeVost', 'AniMedia', 'Kotafan', 'Gears Media',
+            'SovietRomance', 'M603', 'AniStar', 'Tunel', 'Flarrow Films',
+            'HDrezka', 'Rezka', 'Filmix', 'Kinobase', 'Lumex'
+        ]
     };
 
     // ============================================
@@ -567,93 +572,127 @@
     // ============================================
     // СТРАНИЦА СПИСКА УВЕДОМЛЕНИЙ
     // ============================================
-    function showNotificationsPage() {
-        var notifications = getNotifications();
-
-        if (notifications.length === 0) {
-            Lampa.Noty.show({
-                title: 'Уведомления',
-                description: 'Нет новых уведомлений',
-                time: 3000
-            });
-            return;
-        }
-
-        // Создаём массив элементов для модального окна
-        var items = [];
-        notifications.forEach(function(n) {
-            items.push({
-                title: n.title,
-                subtitle: 'S' + n.season + ':E' + n.episode + ' • ' + n.voice,
-                description: new Date(n.timestamp).toLocaleString(),
-                kinopoisk_id: n.kinopoisk_id,
-                poster: n.poster,
-                url: 'full/' + n.kinopoisk_id
-            });
-        });
-
-        console.log('[VoiceRelease] Открытие уведомлений, элементов:', items.length);
-
-        // Открываем модальное окно с списком
-        Lampa.Modal.open({
-            title: '🔔 Уведомления о новых сериях',
-            size: 'large',
-            items: items,
-            onSelect: function(item) {
-                console.log('[VoiceRelease] Выбор уведомления:', item);
-                if (item && item.url) {
-                    Lampa.Activity.push({
-                        url: item.url,
-                        id: item.kinopoisk_id,
-                        type: 'full'
-                    });
-                }
-            }
-        });
-    }
+    // Удалено: используется showSubscriptionsMenu() в главном меню
 
     // ============================================
     // СТРАНИЦА СПИСКА ОТСЛЕЖИВАЕМЫХ
     // ============================================
-    function showTrackingPage() {
-        var tracking = getTracking();
+    // Удалено: используется showSubscriptionsMenu() в главном меню
 
-        console.log('[VoiceRelease] Открытие списка отслеживаемых, всего:', tracking.length);
+    // ============================================
+    // ДОБАВЛЕНИЕ КНОПКИ В МЕНЮ LAMPA
+    // ============================================
+    function addMenuButton() {
+        // Добавляем пункт "Подписки" в главное меню Lampa
+        setTimeout(function() {
+            addSubscriptionsMenuItem();
+        }, 2000);
+    }
 
-        if (tracking.length === 0) {
-            Lampa.Noty.show({
-                title: 'Отслеживаемые сериалы',
-                description: 'Вы ещё не отслеживаете ни один сериал',
-                time: 3000
-            });
+    function addSubscriptionsMenuItem() {
+        // Проверяем, есть ли уже наш пункт
+        if ($('.menu__item:contains("Подписки")').length > 0) {
+            console.log('[VoiceRelease] Пункт "Подписки" уже есть в меню');
             return;
         }
 
-        // Создаём массив элементов для модального окна
-        var items = [];
-        tracking.forEach(function(t) {
-            var status = t.last_episode ?
-                'S' + t.last_episode.season + ':E' + t.last_episode.episode :
-                'Ожидание...';
-            items.push({
-                title: t.title,
-                subtitle: t.voice + ' • ' + status,
-                kinopoisk_id: t.kinopoisk_id,
-                poster: t.poster,
-                url: 'full/' + t.kinopoisk_id
-            });
+        // Создаём кнопку меню
+        var button = $('<li class="menu__item selector">' +
+            '<div class="menu__ico">' +
+            '<svg width="200" height="243" viewBox="0 0 200 243" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<path d="M100 0C44.8 0 0 44.8 0 100C0 155.2 44.8 200 100 200C155.2 200 200 155.2 200 100C200 44.8 155.2 0 100 0ZM100 180C55.9 180 20 144.1 20 100C20 55.9 55.9 20 100 20C144.1 20 180 55.9 180 100C180 144.1 144.1 180 100 180Z" fill="white"/>' +
+            '<path d="M100 50C72.4 50 50 72.4 50 100C50 127.6 72.4 150 100 150C127.6 150 150 127.6 150 100C150 72.4 127.6 50 100 50ZM100 130C83.5 130 70 116.5 70 100C70 83.5 83.5 70 100 70C116.5 70 130 83.5 130 100C130 116.5 116.5 130 100 130Z" fill="white"/>' +
+            '</svg>' +
+            '</div>' +
+            '<div class="menu__text">Подписки</div>' +
+            '</li>');
+
+        // Обработчик нажатия
+        button.on('hover:enter', function() {
+            console.log('[VoiceRelease] Открытие подписок');
+            showSubscriptionsMenu();
         });
 
-        console.log('[VoiceRelease] Элементов в списке:', items.length);
+        // Добавляем кнопку в меню (после последнего элемента)
+        var menuList = $('.menu .menu__list').first();
+        if (menuList.length) {
+            menuList.append(button);
+            console.log('[VoiceRelease] Пункт "Подписки" добавлен в меню');
+        } else {
+            console.log('[VoiceRelease] Не найдено меню для добавления');
+        }
+    }
 
-        // Открываем модальное окно с списком
-        Lampa.Modal.open({
+    function showSubscriptionsMenu() {
+        var tracking = getTracking();
+        var notifications = getNotifications();
+
+        // Создаём элементы меню
+        var items = [];
+
+        // Раздел: Отслеживаемые сериалы
+        items.push({
             title: '📺 Отслеживаемые сериалы',
-            size: 'large',
+            type: 'header',
+            disabled: true
+        });
+
+        if (tracking.length === 0) {
+            items.push({
+                title: 'Нет отслеживаемых сериалов',
+                subtitle: 'Добавьте сериал через кнопку на странице',
+                disabled: true
+            });
+        } else {
+            tracking.forEach(function(t) {
+                var status = t.last_episode ?
+                    'S' + t.last_episode.season + ':E' + t.last_episode.episode :
+                    'Ожидание...';
+                items.push({
+                    title: t.title,
+                    subtitle: t.voice + ' • ' + status,
+                    kinopoisk_id: t.kinopoisk_id,
+                    url: 'full/' + t.kinopoisk_id,
+                    action: 'open'
+                });
+            });
+        }
+
+        // Раздел: Уведомления
+        items.push({
+            title: '',
+            type: 'separator'
+        });
+
+        items.push({
+            title: '🔔 Последние уведомления',
+            type: 'header',
+            disabled: true
+        });
+
+        if (notifications.length === 0) {
+            items.push({
+                title: 'Нет новых уведомлений',
+                disabled: true
+            });
+        } else {
+            notifications.slice(0, 10).forEach(function(n) {
+                items.push({
+                    title: n.title,
+                    subtitle: 'S' + n.season + ':E' + n.episode + ' • ' + n.voice,
+                    kinopoisk_id: n.kinopoisk_id,
+                    url: 'full/' + n.kinopoisk_id,
+                    action: 'open'
+                });
+            });
+        }
+
+        // Открываем меню с элементами
+        Lampa.Select.show({
+            title: 'Подписки',
             items: items,
             onSelect: function(item) {
-                console.log('[VoiceRelease] Выбор сериала:', item);
-                if (item && item.url) {
+                if (item && item.action === 'open' && item.url) {
                     Lampa.Activity.push({
                         url: item.url,
                         id: item.kinopoisk_id,
@@ -662,8 +701,8 @@
                 }
             },
             onContextMenu: function(item, element, callback) {
-                // Контекстное меню для удаления
-                if (!item || !item.kinopoisk_id) {
+                // Контекстное меню для отслеживаемых
+                if (!item || !item.kinopoisk_id || item.disabled) {
                     if (callback) callback();
                     return;
                 }
@@ -673,7 +712,7 @@
                     text: 'Вы действительно хотите отключить отслеживание сериала "' + item.title + '"?',
                     onConfirm: function() {
                         removeTracking(item.kinopoisk_id);
-                        showTrackingPage();  // Обновляем список
+                        showSubscriptionsMenu();  // Обновляем меню
                         Lampa.Noty.show({
                             title: 'Удалено из отслеживаемых',
                             time: 3000
@@ -683,41 +722,11 @@
                         if (callback) callback();
                     }
                 });
+            },
+            onBack: function() {
+                Lampa.Controller.toggle('menu');
             }
         });
-    }
-
-    // ============================================
-    // ДОБАВЛЕНИЕ КНОПКИ В МЕНЮ LAMPA
-    // ============================================
-    function addMenuButton() {
-        // Проверяем, есть ли Head API и работает ли оно
-        if (typeof Lampa.Head !== 'undefined' && typeof Lampa.Head.addIcon === 'function') {
-            try {
-                // Кнопка уведомлений плагина (если включена в настройках)
-                if (CONFIG.SHOW_NOTIFICATION_ICON) {
-                    Lampa.Head.addIcon('🔔', function() {
-                        console.log('[VoiceRelease] Открытие уведомлений');
-                        showNotificationsPage();
-                    });
-                }
-
-                // Кнопка списка отслеживаемых (если включена в настройках)
-                if (CONFIG.SHOW_TRACKING_ICON) {
-                    Lampa.Head.addIcon('📺', function() {
-                        console.log('[VoiceRelease] Открытие списка отслеживаемых');
-                        showTrackingPage();
-                    });
-                }
-
-                console.log('[VoiceRelease] Иконки добавлены в шапку');
-                console.log('[VoiceRelease] 🔔=' + CONFIG.SHOW_NOTIFICATION_ICON + ' 📺=' + CONFIG.SHOW_TRACKING_ICON);
-            } catch (e) {
-                console.log('[VoiceRelease] Ошибка добавления иконок:', e);
-            }
-        } else {
-            console.log('[VoiceRelease] Head API недоступен, иконки не добавлены');
-        }
     }
 
     // ============================================
@@ -859,14 +868,11 @@
             // Принудительная проверка
             checkNow: checkNewEpisodes,
 
-            // Показать страницу уведомлений
-            showNotifications: showNotificationsPage,
-
-            // Показать список отслеживаемых
-            showTracking: showTrackingPage,
+            // Показать подписки (главное меню)
+            showSubscriptions: showSubscriptionsMenu,
 
             // Версия плагина
-            version: '1.0.0'
+            version: '1.1.0'
         };
 
         console.log('[VoiceRelease] Plugin initialized successfully!');
