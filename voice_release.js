@@ -127,7 +127,8 @@
     }
 
     function checkProvider(providerData, voiceName, callback) {
-        var network = new Lampa.Request();
+        // Используем Lampa.Reguest (с буквой 'g' - это правильное название в Lampa)
+        var network = new Lampa.Reguest();
         network.timeout(10000);  // 10 секунд таймаут
 
         network.silent(providerData.url, function(response) {
