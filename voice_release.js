@@ -350,26 +350,40 @@
     // ИНТЕРФЕЙС: КНОПКА "ОТСЛЕЖИВАТЬ"
     // ============================================
     function addTrackButton() {
+        console.log('[VoiceRelease] addTrackButton вызвана');
+        
         // Получаем текущую активность
         var activity = Lampa.Activity.active();
-        if (!activity || !activity.activity) {
+        console.log('[VoiceRelease] Activity:', !!activity);
+        
+        if (!activity) {
+            console.log('[VoiceRelease] Нет активной активности');
             return;
         }
 
-        var render = activity.activity.render();
-        if (!render) {
-            return;
+        // Проверяем, есть ли activity.activity (для совместимости)
+        if (!activity.activity) {
+            console.log('[VoiceRelease] Нет activity.activity, пробуем напрямую activity');
         }
 
+        var render = activity.activity ? activity.activity.render() : null;
+        console.log('[VoiceRelease] Render:', !!render);
+        
         // Проверяем, есть ли card
         var card = activity.card;
+        console.log('[VoiceRelease] Card:', !!card, card ? card.title : 'нет данных');
+        
         if (!card) {
+            console.log('[VoiceRelease] Нет карточки в активности');
             return;
         }
 
         // Проверяем, сериал ли это
         var isSeries = card.type == 'tv' || card.number_of_seasons > 0;
+        console.log('[VoiceRelease] Это сериал:', isSeries, 'type:', card.type);
+        
         if (!isSeries) {
+            console.log('[VoiceRelease] Это не сериал, пропускаем');
             return;
         }
 
@@ -378,12 +392,21 @@
         var alreadyTracked = tracking.find(function(t) {
             return t.kinopoisk_id == card.kinopoisk_id || t.imdb_id == card.imdb_id;
         });
+        console.log('[VoiceRelease] Уже отслеживается:', !!alreadyTracked);
+
+        // Если render не найден, пробуем найти через DOM
+        if (!render) {
+            console.log('[VoiceRelease] Render не найден, пробуем найти через DOM');
+            render = $('.card__title, .info__title').first().closest('.layer, .activity-content');
+        }
 
         if (alreadyTracked) {
             // Уже отслеживается - показываем кнопку "Удалить"
+            console.log('[VoiceRelease] Показываем кнопку "Удалить"');
             addRemoveButton(render, alreadyTracked, card);
         } else {
             // Не отслеживается - показываем кнопку "Добавить"
+            console.log('[VoiceRelease] Показываем кнопку "Отслеживать"');
             addAddButton(render, card);
         }
     }
@@ -590,12 +613,16 @@
     }
 
     function addSubscriptionsMenuItem() {
+        console.log('[VoiceRelease] addSubscriptionsMenuItem вызвана');
+        
         // Проверяем, есть ли уже наш пункт
         if ($('.menu__item:contains("Подписки")').length > 0) {
             console.log('[VoiceRelease] Пункт "Подписки" уже есть в меню');
             return;
         }
 
+        console.log('[VoiceRelease] Создаём кнопку меню');
+        
         // Создаём кнопку меню с иконкой как в стандарте Lampa
         var button = $('<li class="menu__item selector">' +
             '<div class="menu__ico">' +
@@ -618,11 +645,15 @@
 
         // Добавляем кнопку в меню (после последнего элемента)
         var menuList = $('.menu .menu__list').first();
+        console.log('[VoiceRelease] menuList найдено:', menuList.length);
+        
         if (menuList.length) {
             menuList.append(button);
             console.log('[VoiceRelease] Пункт "Подписки" добавлен в меню');
         } else {
             console.log('[VoiceRelease] Не найдено меню для добавления');
+            console.log('[VoiceRelease] Пробуем найти .menu:', $('.menu').length);
+            console.log('[VoiceRelease] Пробуем найти .menu__list:', $('.menu__list').length);
         }
     }
 
@@ -760,13 +791,23 @@
     // ПОДПИСКА НА СОБЫТИЯ
     // ============================================
     function subscribeToEvents() {
+        console.log('[VoiceRelease] Подписка на события Lampa.Listener');
+        
         // Подписка на рендеринг карточки (для кнопки и бейджа)
         Lampa.Listener.follow('full', function(e) {
+            console.log('[VoiceRelease] Событие full:', e.type);
+            
             if (e.type == 'complite') {
-                // Добавляем кнопку отслеживания
+                // Проверяем, есть ли данные о фильме/сериале
+                if (e.data && e.data.movie) {
+                    console.log('[VoiceRelease] Карточка сериала/фильма:', e.data.movie.title);
+                }
+                
+                // Добавляем кнопку отслеживания с задержкой
                 setTimeout(function() {
+                    console.log('[VoiceRelease] Вызов addTrackButton');
                     addTrackButton();
-                }, 500);
+                }, 1000);
 
                 // Добавляем бейдж если есть новые серии
                 if (e.data && e.data.movie) {
@@ -780,6 +821,8 @@
         document.addEventListener('keydown', updateActivityTime);
         document.addEventListener('touchstart', updateActivityTime);
         document.addEventListener('click', updateActivityTime);
+        
+        console.log('[VoiceRelease] Подписка на события завершена');
     }
 
     // ============================================
