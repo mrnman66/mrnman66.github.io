@@ -565,6 +565,58 @@
     function registerSubscriptionsComponent() {
         console.log('[VoiceRelease] registerSubscriptionsComponent вызвана');
         
+        // Добавляем стили для компонента
+        if (!$('#voice-release-subscriptions-style').length) {
+            $('head').append('<style id="voice-release-subscriptions-style">' +
+                '.items-cards.mapping--line { ' +
+                'display: flex; ' +
+                'flex-wrap: wrap; ' +
+                'gap: 15px; ' +
+                'padding: 20px; ' +
+                '} ' +
+                '.items-cards.mapping--line .card { ' +
+                'width: calc((100% - 60px) / 6); ' +  // 6 карточек в ряд
+                'min-width: 200px; ' +
+                'flex: 0 0 auto; ' +
+                '} ' +
+                '.card--voice-release .card__subscribe { ' +
+                'position: absolute; ' +
+                'bottom: 10px; ' +
+                'left: 10px; ' +
+                'right: 10px; ' +
+                'background: rgba(0,0,0,0.8); ' +
+                'padding: 8px; ' +
+                'border-radius: 6px; ' +
+                'font-size: 11px; ' +
+                'z-index: 10; ' +
+                '} ' +
+                '.card--voice-release .card__subscribe-status { ' +
+                'display: inline-block; ' +
+                'width: 8px; ' +
+                'height: 8px; ' +
+                'border-radius: 50%; ' +
+                'background: #4CAF50; ' +
+                'margin-right: 6px; ' +
+                '} ' +
+                '.card--voice-release .card__subscribe-position, ' +
+                '.card--voice-release .card__subscribe-voice { ' +
+                'display: block; ' +
+                'color: #fff; ' +
+                'margin-top: 4px; ' +
+                'white-space: nowrap; ' +
+                'overflow: hidden; ' +
+                'text-overflow: ellipsis; ' +
+                '} ' +
+                '.card--voice-release .card__subscribe-voice { ' +
+                'color: #aaa; ' +
+                '} ' +
+                '.card--voice-release.card--focus { ' +
+                'transform: scale(1.05); ' +
+                'transition: transform 0.2s; ' +
+                '} ' +
+                '</style>');
+        }
+        
         // Создаём конструктор компонента
         function SubscriptionsComponent(data) {
             var _this = this;
@@ -572,11 +624,14 @@
             _this.items = data.items || [];
             _this.html = null;
             _this.scroll = null;
+            _this.body = null;
             
             console.log('[VoiceRelease] SubscriptionsComponent constructor, items:', _this.items.length);
             
             _this.create = function() {
                 console.log('[VoiceRelease] SubscriptionsComponent create вызвана');
+                
+                _this.html = $('<div class="full"></div>');
                 
                 // Создаём прокрутку как в Lampa
                 _this.scroll = new Lampa.Scroll({
@@ -585,10 +640,10 @@
                     step: 300        // Шаг прокрутки
                 });
 
-                _this.html = $('<div class="full"></div>');
-                var body = $('<div class="subscriptions"></div>');  // Контейнер как .timetable
+                // Контейнер для карточек - используем класс items-cards как в Lampa
+                _this.body = $('<div class="items-cards mapping--line"></div>');
 
-                _this.scroll.append(body);
+                _this.scroll.append(_this.body);
                 _this.html.append(_this.scroll.render());
 
                 // Рендерим карточки
@@ -597,27 +652,40 @@
                 if (_this.items.length > 0) {
                     _this.items.forEach(function(item) {
                         var card = createSubscriptionCard(item);
-                        body.append(card);
+                        _this.body.append(card);
                     });
+                    
+                    // Инициализируем контроллер после рендеринга
+                    setTimeout(function() {
+                        Lampa.Controller.add('subscriptions_cards', {
+                            toggle: function() {
+                                Lampa.Controller.collectionFocus(_this.body.find('.card').first(), _this.body);
+                            },
+                            up: function() {
+                                Lampa.Controller.move(_this.body, 'up');
+                            },
+                            down: function() {
+                                Lampa.Controller.move(_this.body, 'down');
+                            },
+                            right: function() {
+                                Lampa.Controller.move(_this.body, 'right');
+                            },
+                            left: function() {
+                                Lampa.Controller.move(_this.body, 'left');
+                            }
+                        });
+                        Lampa.Controller.toggle('subscriptions_cards');
+                    }, 100);
                 } else {
                     // Пустое состояние
                     var empty = new Lampa.Empty({
-                        title: Lang.translate('timetable_empty') || 'Нет отслеживаемых сериалов',
+                        title: 'Нет отслеживаемых сериалов',
                         descr: 'Добавьте сериал через кнопку "Отслеживать" на странице сериала'
                     });
-                    body.append(empty.render());
+                    _this.body.append(empty.render());
                     _this.start = empty.start.bind(empty);
                 }
 
-                // Регистрируем контроллер
-                Lampa.Controller.add('subscriptions_cards', {
-                    toggle: function() {
-                        Lampa.Controller.collectionFocus(body.find('.selector').first(), body);
-                    }
-                });
-
-                Lampa.Controller.toggle('subscriptions_cards');
-                
                 return _this.html;
             };
             
@@ -653,11 +721,11 @@
     }
 
     // ============================================
-    // СОЗДАНИЕ КАРТОЧКИ ПОДПИСКИ (в стиле Lampa Timetable)
+    // СОЗДАНИЕ КАРТОЧКИ ПОДПИСКИ (в стиле Lampa Cards)
     // ============================================
     function createSubscriptionCard(item) {
         console.log('[VoiceRelease] createSubscriptionCard:', item.title);
-
+        
         // Получаем полный URL постера
         var posterUrl = item.poster || '';
         if (posterUrl && posterUrl.indexOf('http') !== 0 && posterUrl.indexOf('/') === 0) {
@@ -665,32 +733,35 @@
         } else if (!posterUrl || posterUrl.indexOf('img_load') >= 0) {
             posterUrl = './img/img_load.svg';
         }
-
-        // Создаём карточку в стиле timetable
+        
+        // Создаём карточку в стиле Lampa
         var status = item.last_episode ?
             'S' + item.last_episode.season + ':E' + item.last_episode.episode :
             'Ожидание...';
-
-        var card = $('<div class="card card--voice-release selector layer--visible layer--render">' +
+        
+        // Создаём карточку с правильной структурой для навигации
+        var card = $('<div class="card card--voice-release selector layer--visible layer--render" data-kinopoisk-id="' + item.kinopoisk_id + '">' +
             '<div class="card__imgbox">' +
-            '<div class="card__view image--ready">' +
-            '<img class="card__img" src="' + posterUrl + '" />' +
+            '<div class="card__view">' +
+            '<img class="card__img" src="' + posterUrl + '" data-src="' + posterUrl + '" />' +
             '</div>' +
             '</div>' +
             '<div class="card__left">' +
             '<div class="card__title">' + item.title + '</div>' +
-            '<div class="card__age"></div>' +
-            '</div>' +
             '<div class="card__subscribe">' +
             '<div class="card__subscribe-status on"></div>' +
             '<div class="card__subscribe-position">' + status + '</div>' +
             '<div class="card__subscribe-voice">' + item.voice + '</div>' +
             '</div>' +
+            '</div>' +
             '</div>');
 
-        // Обработчик нажатия
+        // Обработчик наведения
         card.on('hover:enter', function() {
             console.log('[VoiceRelease] Hover на карточке:', item.title);
+            card.addClass('card--focus');
+        }).on('hover:leave', function() {
+            card.removeClass('card--focus');
         }).on('hover:click', function() {
             console.log('[VoiceRelease] Клик на карточке, переход к:', item.title);
             Lampa.Activity.push({
@@ -859,7 +930,7 @@
             showSubscriptions: showSubscriptionsPage,
 
             // Версия плагина
-            version: '1.4.0'
+            version: '1.4.1'
         };
 
         console.log('[VoiceRelease] Plugin initialized successfully!');
