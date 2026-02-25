@@ -487,9 +487,9 @@
                     removeTracking(card.kinopoisk_id);
                     
                     Lampa.Noty.show({
-                        title: '❌ Отслеживание отключено',
-                        description: 'Сериал "' + card.title + '" удалён из списка отслеживаемых',
-                        time: 4000
+                        title: 'Отслеживание отключено',
+                        description: '"' + card.title + '" удалён',
+                        time: 3000
                     });
                 } else {
                     // Ещё не отслеживается - добавляем
@@ -510,16 +510,17 @@
                     saveTracking(trackingData);
 
                     Lampa.Noty.show({
-                        title: '✅ Отслеживание включено',
-                        description: 'Сериал "' + card.title + '" (' + item.voice + ') добавлен в список отслеживаемых',
-                        time: 4000
+                        title: 'Отслеживание включено',
+                        description: '"' + card.title + '" (' + item.voice + ')',
+                        time: 3000
                     });
                 }
 
-                // Перерисовываем кнопку
+                // Обновляем кнопку через небольшую задержку
                 setTimeout(function() {
+                    console.log('[VoiceRelease] Обновление кнопки после изменения');
                     addTrackButton();
-                }, 500);
+                }, 300);
             }
         });
     }
@@ -633,17 +634,17 @@
     // СТРАНИЦА ПОДПИСОК (как в стандарте Lampa)
     // ============================================
     function showSubscriptionsPage() {
+        console.log('[VoiceRelease] showSubscriptionsPage вызвана');
+        
         var tracking = getTracking();
-        var notifications = getNotifications();
+        console.log('[VoiceRelease] Отслеживаемые сериалы:', tracking.length);
 
         // Создаём массив элементов в формате Lampa Card
         var items = [];
 
         // Добавляем отслеживаемые сериалы
         tracking.forEach(function(t) {
-            var status = t.last_episode ?
-                'S' + t.last_episode.season + ':E' + t.last_episode.episode :
-                'Ожидание...';
+            console.log('[VoiceRelease] Добавляем сериал:', t.title, 'voice:', t.voice);
             
             items.push({
                 kinopoisk_id: t.kinopoisk_id,
@@ -661,10 +662,12 @@
             });
         });
 
+        console.log('[VoiceRelease] Всего карточек для отображения:', items.length);
+
         // Открываем страницу с карточками
         Lampa.Activity.push({
             url: 'voice_release_subscriptions',
-            title: 'Подписки',
+            title: 'Мои подписки',
             component: 'voice_subscriptions',
             page: 1,
             items: items
@@ -680,9 +683,13 @@
     // РЕГИСТРАЦИЯ КОМПОНЕНТА ПОДПИСОК
     // ============================================
     function registerSubscriptionsComponent() {
+        console.log('[VoiceRelease] registerSubscriptionsComponent вызвана');
+        
         var Component = {
             onCreate: function() {
                 var _this = this;
+                console.log('[VoiceRelease] SubscriptionsComponent onCreate, items:', this.data.items ? this.data.items.length : 0);
+                
                 var scroll = new Lampa.Scroll({
                     step: 300,
                     visible: 5
@@ -698,16 +705,18 @@
 
                 // Рендерим карточки
                 var items = _this.data.items || [];
-                items.forEach(function(item) {
-                    var card = createSubscriptionCard(item);
-                    cards.append(card);
-                });
-
-                // Пустое состояние
-                if (items.length === 0) {
+                console.log('[VoiceRelease] Рендерим карточек:', items.length);
+                
+                if (items.length > 0) {
+                    items.forEach(function(item) {
+                        var card = createSubscriptionCard(item);
+                        cards.append(card);
+                    });
+                } else {
+                    // Пустое состояние
                     var empty = Lampa.Template.get('empty', {
                         title: 'Нет отслеживаемых сериалов',
-                        descr: 'Добавьте сериал через кнопку на странице'
+                        descr: 'Добавьте сериал через кнопку "Отслеживать" на странице сериала'
                     });
                     cards.append(empty);
                 }
@@ -727,6 +736,7 @@
         };
 
         Lampa.Component.add('voice_subscriptions', Component);
+        console.log('[VoiceRelease] Компонент voice_subscriptions зарегистрирован');
     }
 
     // ============================================
