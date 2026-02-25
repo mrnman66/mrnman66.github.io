@@ -757,7 +757,25 @@
         
         // Получаем шаблон карточки
         var card = Lampa.Template.get('card', cardData, true);
-        card.addClass('card--voice-release');
+        
+        // Проверяем, что вернул Template.get
+        console.log('[VoiceRelease] Template.get вернул:', typeof card, card);
+        
+        // Если это не jQuery объект, создаём карточку вручную
+        if (typeof card !== 'object' || !card.addClass) {
+            card = $('<div class="card card--voice-release selector">' +
+                '<div class="card__imgbox">' +
+                '<div class="card__view">' +
+                '<img class="card__img" src="' + item.poster + '" />' +
+                '</div>' +
+                '</div>' +
+                '<div class="card__left">' +
+                '<div class="card__title">' + item.title + '</div>' +
+                '</div>' +
+                '</div>');
+        } else {
+            card.addClass('card--voice-release');
+        }
 
         // Добавляем бейдж с информацией о подписке
         var status = item.last_episode ?
@@ -769,7 +787,13 @@
             '<div class="card__subscribe-position">' + status + '</div>' +
             '<div class="card__subscribe-voice">' + item.voice + '</div>' +
             '</div>');
-        card.find('.card__view').after(badge);
+        
+        var cardView = card.find('.card__view');
+        if (cardView.length) {
+            cardView.after(badge);
+        } else {
+            card.append(badge);
+        }
 
         // Обработчик нажатия
         card.on('hover:enter', function() {
