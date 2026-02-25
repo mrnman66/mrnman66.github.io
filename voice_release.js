@@ -25,8 +25,8 @@
             'HDrezka', 'Rezka', 'Filmix', 'Kinobase', 'Lumex'
         ],
         // Настройки отображения иконок
-        SHOW_NOTIFICATION_ICON: true,  // Показывать иконку 🔔
-        SHOW_TRACKING_ICON: true       // Показывать иконку 📺
+        SHOW_NOTIFICATION_ICON: false,  // Скрыть - используем стандартный центр уведомлений Lampa
+        SHOW_TRACKING_ICON: true        // Показывать иконку 📺 для списка отслеживаемых
     };
 
     // ============================================
@@ -297,25 +297,48 @@
     // УВЕДОМЛЕНИЯ
     // ============================================
     function showNotification(item, episode) {
-        var message = item.title + ' — ' + item.voice + 
+        var message = item.title + ' — ' + item.voice +
                      ', Сезон ' + episode.season + ', Серия ' + episode.episode;
 
-        Lampa.Noty.show({
-            title: '🆕 Новая серия!',
-            description: message,
-            image: item.poster || '',
-            time: 7000,
-            onClick: function() {
-                // Переход к сериалу
-                if (item.kinopoisk_id) {
-                    Lampa.Activity.action({
-                        url: 'full/' + item.kinopoisk_id,
-                        id: item.kinopoisk_id,
-                        type: 'full'
+        // Используем стандартный API уведомлений Lampa
+        // Notice.pushNotice(class_name, data, resolve, reject)
+        if (typeof Lampa.Notice !== 'undefined' && typeof Lampa.Notice.pushNotice === 'function') {
+            var noticeData = {
+                id: 'voice_release_' + item.kinopoisk_id + '_' + episode.season + '_' + episode.episode,
+                from: 'voice_release',
+                title: '🆕 Новая серия',
+                text: message,
+                time: Date.now(),
+                poster: item.poster || '',
+                kinopoisk_id: item.kinopoisk_id,
+                url: 'full/' + item.kinopoisk_id
+            };
+
+            Lampa.Notice.pushNotice('lampa', noticeData, 
+                function() {
+                    console.log('[VoiceRelease] Уведомление добавлено в центр уведомлений Lampa');
+                }, 
+                function(err) {
+                    console.log('[VoiceRelease] Ошибка добавления уведомления:', err);
+                    // Резервный вариант - всплывающее уведомление
+                    Lampa.Noty.show({
+                        title: '🆕 Новая серия!',
+                        description: message,
+                        image: item.poster || '',
+                        time: 7000
                     });
                 }
-            }
-        });
+            );
+        } else {
+            // Резервный вариант - всплывающее уведомление
+            Lampa.Noty.show({
+                title: '🆕 Новая серия!',
+                description: message,
+                image: item.poster || '',
+                time: 7000
+            });
+            console.log('[VoiceRelease] Notice API недоступен, использовано Noty');
+        }
     }
 
     // ============================================
