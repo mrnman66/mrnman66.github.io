@@ -23,14 +23,6 @@
             'JAM Club', 'AnimeVost', 'AniMedia', 'Kotafan', 'Gears Media',
             'SovietRomance', 'M603', 'AniStar', 'Tunel', 'Flarrow Films',
             'HDrezka', 'Rezka', 'Filmix', 'Kinobase', 'Lumex'
-        ],
-        // Настройки плагина
-        PROVIDERS: ['lumex', 'kodik', 'collaps'],  // Балансёры для проверки
-        VOICES: [  // Известные озвучки для автоопределения
-            'AniLibria', 'AniLibria TV', 'Studio Band', 'SHIZA Project', 'DreamCast',
-            'JAM Club', 'AnimeVost', 'AniMedia', 'Kotafan', 'Gears Media',
-            'SovietRomance', 'M603', 'AniStar', 'Tunel', 'Flarrow Films',
-            'HDrezka', 'Rezka', 'Filmix', 'Kinobase', 'Lumex'
         ]
     };
 
@@ -75,22 +67,6 @@
 
     function getNotifications() {
         return Lampa.Storage.cache(CONFIG.NOTIFICATIONS_KEY, 100, []);
-    }
-
-    function addNotification(data) {
-        var notifications = getNotifications();
-        notifications.unshift({
-            kinopoisk_id: data.kinopoisk_id,
-            title: data.title,
-            voice: data.voice,
-            season: data.season,
-            episode: data.episode,
-            poster: data.poster,
-            timestamp: Date.now()
-        });
-        // Храним последние 100 уведомлений
-        notifications = notifications.slice(0, 100);
-        Lampa.Storage.set(CONFIG.NOTIFICATIONS_KEY, notifications);
     }
 
     // ============================================
@@ -300,54 +276,6 @@
     }
 
     // ============================================
-    // УВЕДОМЛЕНИЯ
-    // ============================================
-    function showNotification(item, episode) {
-        var message = item.title + ' — ' + item.voice +
-                     ', Сезон ' + episode.season + ', Серия ' + episode.episode;
-
-        // Используем стандартный API уведомлений Lampa
-        // Notice.pushNotice(class_name, data, resolve, reject)
-        if (typeof Lampa.Notice !== 'undefined' && typeof Lampa.Notice.pushNotice === 'function') {
-            var noticeData = {
-                id: 'voice_release_' + item.kinopoisk_id + '_' + episode.season + '_' + episode.episode,
-                from: 'voice_release',
-                title: '🆕 Новая серия',
-                text: message,
-                time: Date.now(),
-                poster: item.poster || '',
-                kinopoisk_id: item.kinopoisk_id,
-                url: 'full/' + item.kinopoisk_id
-            };
-
-            Lampa.Notice.pushNotice('lampa', noticeData, 
-                function() {
-                    console.log('[VoiceRelease] Уведомление добавлено в центр уведомлений Lampa');
-                }, 
-                function(err) {
-                    console.log('[VoiceRelease] Ошибка добавления уведомления:', err);
-                    // Резервный вариант - всплывающее уведомление
-                    Lampa.Noty.show({
-                        title: '🆕 Новая серия!',
-                        description: message,
-                        image: item.poster || '',
-                        time: 7000
-                    });
-                }
-            );
-        } else {
-            // Резервный вариант - всплывающее уведомление
-            Lampa.Noty.show({
-                title: '🆕 Новая серия!',
-                description: message,
-                image: item.poster || '',
-                time: 7000
-            });
-            console.log('[VoiceRelease] Notice API недоступен, использовано Noty');
-        }
-    }
-
-    // ============================================
     // ИНТЕРФЕЙС: КНОПКА "ОТСЛЕЖИВАТЬ"
     // ============================================
     function addTrackButton() {
@@ -519,56 +447,6 @@
             }
         });
     }
-
-    // ============================================
-    // БЕЙДЖ НА КАРТОЧКЕ СЕРИАЛА
-    // ============================================
-    function addBadgeToCard(movie, render) {
-        var tracking = getTracking();
-        var item = tracking.find(function(t) {
-            return (t.kinopoisk_id == movie.kinopoisk_id || 
-                    t.imdb_id == movie.imdb_id) && 
-                   t.has_new_episode === true;
-        });
-
-        if (item && item.last_episode) {
-            // Удаляем старый бейдж если есть
-            $('.voice-release-badge', render).remove();
-
-            var badge = $('<div class="voice-release-badge" style="' +
-                'display: inline-block; ' +
-                'padding: 6px 12px; ' +
-                'background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); ' +
-                'border-radius: 6px; ' +
-                'color: white; ' +
-                'font-size: 12px; ' +
-                'font-weight: 600; ' +
-                'margin-left: 10px; ' +
-                '">' +
-                '🆕 S' + item.last_episode.season + ':E' + item.last_episode.episode + 
-                ' (' + item.voice + ')' +
-                '</div>');
-
-            var title = $('.card__title, .info__title', render).first();
-            if (title.length) {
-                title.append(badge);
-            }
-
-            // Сбрасываем флаг после отображения
-            item.has_new_episode = false;
-            saveTracking(item);
-        }
-    }
-
-    // ============================================
-    // СТРАНИЦА СПИСКА УВЕДОМЛЕНИЙ
-    // ============================================
-    // Удалено: используется showSubscriptionsMenu() в главном меню
-
-    // ============================================
-    // СТРАНИЦА СПИСКА ОТСЛЕЖИВАЕМЫХ
-    // ============================================
-    // Удалено: используется showSubscriptionsMenu() в главном меню
 
     // ============================================
     // ДОБАВЛЕНИЕ КНОПКИ В МЕНЮ LAMPA
@@ -995,7 +873,7 @@
             showSubscriptions: showSubscriptionsPage,
 
             // Версия плагина
-            version: '1.2.1'
+            version: '1.3.0'
         };
 
         console.log('[VoiceRelease] Plugin initialized successfully!');
