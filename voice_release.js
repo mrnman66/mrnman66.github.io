@@ -580,22 +580,33 @@
                 description: new Date(n.timestamp).toLocaleString(),
                 kinopoisk_id: n.kinopoisk_id,
                 poster: n.poster,
-                url: 'full/' + n.kinopoisk_id
-            });
-        });
-
-        // Открываем модальное окно с списком
-        Lampa.Select.show({
-            title: '🔔 Уведомления о новых сериях',
-            items: items,
-            onSelect: function(item) {
-                if (item && item.url) {
+                url: 'full/' + n.kinopoisk_id,
+                action: function() {
                     Lampa.Activity.push({
-                        url: item.url,
-                        id: item.kinopoisk_id,
+                        url: 'full/' + n.kinopoisk_id,
+                        id: n.kinopoisk_id,
                         type: 'full'
                     });
                 }
+            });
+        });
+
+        console.log('[VoiceRelease] Открытие уведомлений, элементов:', items.length);
+
+        // Открываем модальное окно с списком через Lampa.Modal
+        Lampa.Modal.open({
+            title: '🔔 Уведомления о новых сериях',
+            size: 'large',
+            template: 'notice',
+            items: items,
+            onSelect: function(item) {
+                console.log('[VoiceRelease] Выбор уведомления:', item);
+                if (item && item.action) {
+                    item.action();
+                }
+            },
+            onBack: function() {
+                console.log('[VoiceRelease] Закрыто уведомление');
             }
         });
     }
@@ -605,6 +616,8 @@
     // ============================================
     function showTrackingPage() {
         var tracking = getTracking();
+
+        console.log('[VoiceRelease] Открытие списка отслеживаемых, всего:', tracking.length);
 
         if (tracking.length === 0) {
             Lampa.Noty.show({
@@ -626,21 +639,29 @@
                 subtitle: t.voice + ' • ' + status,
                 kinopoisk_id: t.kinopoisk_id,
                 poster: t.poster,
-                url: 'full/' + t.kinopoisk_id
+                url: 'full/' + t.kinopoisk_id,
+                action: function() {
+                    Lampa.Activity.push({
+                        url: 'full/' + t.kinopoisk_id,
+                        id: t.kinopoisk_id,
+                        type: 'full'
+                    });
+                }
             });
         });
 
-        // Открываем модальное окно с списком
-        Lampa.Select.show({
+        console.log('[VoiceRelease] Элементов в списке:', items.length);
+
+        // Открываем модальное окно с списком через Lampa.Modal
+        Lampa.Modal.open({
             title: '📺 Отслеживаемые сериалы',
+            size: 'large',
+            template: 'notice',
             items: items,
             onSelect: function(item) {
-                if (item && item.url) {
-                    Lampa.Activity.push({
-                        url: item.url,
-                        id: item.kinopoisk_id,
-                        type: 'full'
-                    });
+                console.log('[VoiceRelease] Выбор сериала:', item);
+                if (item && item.action) {
+                    item.action();
                 }
             },
             onContextMenu: function(item, element, callback) {
@@ -649,7 +670,7 @@
                     if (callback) callback();
                     return;
                 }
-                
+
                 Lampa.Confirm.open({
                     title: 'Отключить отслеживание',
                     text: 'Вы действительно хотите отключить отслеживание сериала "' + item.title + '"?',
@@ -665,6 +686,9 @@
                         if (callback) callback();
                     }
                 });
+            },
+            onBack: function() {
+                console.log('[VoiceRelease] Закрыт список отслеживаемых');
             }
         });
     }
@@ -856,10 +880,28 @@
     }
 
     // Запуск после готовности Lampa
-    if (window.appready) {
-        init();
-    } else {
-        document.addEventListener('appready', init);
-    }
+    // Проверяем несколько способов на случай гонки инициализации
+    (function safeInit() {
+        if (window.appready === true) {
+            console.log('[VoiceRelease] Lampa уже готова, запуск плагина...');
+            init();
+        } else if (window.Lampa && typeof window.Lampa.Activity !== 'undefined') {
+            console.log('[VoiceRelease] Lampa.Activity доступен, запуск плагина...');
+            init();
+        } else {
+            console.log('[VoiceRelease] Ожидание готовности Lampa...');
+            document.addEventListener('appready', function() {
+                console.log('[VoiceRelease] Событие appready получено');
+                init();
+            });
+            // Дополнительная страховка - пробуем через 2 секунды
+            setTimeout(function() {
+                if (!window.appready && !window.voice_release_plugin) {
+                    console.log('[VoiceRelease] Принудительный запуск через timeout');
+                    init();
+                }
+            }, 2000);
+        }
+    })();
 
 })();
