@@ -683,12 +683,25 @@
             _this.create = function() {
                 console.log('[VoiceRelease] SubscriptionsComponent create вызвана');
                 
+                // Добавляем стили для сетки карточек
+                if (!$('#voice-release-styles').length) {
+                    $('head').append('<style id="voice-release-styles">' +
+                        '.subscriptions-page .full { padding: 20px; }' +
+                        '.subscriptions-page .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }' +
+                        '.subscriptions-page .card { margin: 0; }' +
+                        '.subscriptions-page .card__subscribe { position: absolute; bottom: 10px; left: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 8px; border-radius: 6px; font-size: 12px; }' +
+                        '.subscriptions-page .card__subscribe-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; margin-right: 8px; }' +
+                        '.subscriptions-page .card__subscribe-position { display: block; color: #fff; margin-top: 4px; }' +
+                        '.subscriptions-page .card__subscribe-voice { display: block; color: #aaa; margin-top: 4px; }' +
+                        '</style>');
+                }
+                
                 var scroll = new Lampa.Scroll({
                     step: 300,
                     visible: 5
                 });
 
-                _this.html = $('<div class="full"></div>');
+                _this.html = $('<div class="full subscriptions-page"></div>');
                 _this.scroll = scroll;
 
                 // Создаём сетку карточек
@@ -753,38 +766,28 @@
     // ============================================
     function createSubscriptionCard(item) {
         console.log('[VoiceRelease] createSubscriptionCard:', item.title);
+        console.log('[VoiceRelease] Poster:', item.poster);
         
-        // Создаём данные для карточки
-        var cardData = {
-            title: item.title,
-            original_title: item.original_title,
-            poster: item.poster,
-            kinopoisk_id: item.kinopoisk_id,
-            imdb_id: item.imdb_id,
-            source: 'tmdb'
-        };
-        
-        // Получаем шаблон карточки
-        var card = Lampa.Template.get('card', cardData, true);
-        
-        // Проверяем, что вернул Template.get
-        console.log('[VoiceRelease] Template.get вернул:', typeof card, card);
-        
-        // Если это не jQuery объект, создаём карточку вручную
-        if (typeof card !== 'object' || !card.addClass) {
-            card = $('<div class="card card--voice-release selector">' +
-                '<div class="card__imgbox">' +
-                '<div class="card__view">' +
-                '<img class="card__img" src="' + item.poster + '" />' +
-                '</div>' +
-                '</div>' +
-                '<div class="card__left">' +
-                '<div class="card__title">' + item.title + '</div>' +
-                '</div>' +
-                '</div>');
-        } else {
-            card.addClass('card--voice-release');
+        // Исправляем URL постера если он относительный
+        var posterUrl = item.poster;
+        if (posterUrl && posterUrl.indexOf('http') !== 0 && posterUrl.indexOf('/') === 0) {
+            posterUrl = 'https://image.tmdb.org/t/p/w500' + posterUrl;
+        } else if (!posterUrl || posterUrl.indexOf('img_load') >= 0) {
+            posterUrl = './img/img_load.svg';
         }
+        
+        // Создаём карточку вручную с правильными классами
+        var card = $('<div class="card card--voice-release selector layer--visible layer--render">' +
+            '<div class="card__imgbox">' +
+            '<div class="card__view image--ready">' +
+            '<img class="card__img" src="' + posterUrl + '" />' +
+            '</div>' +
+            '</div>' +
+            '<div class="card__left">' +
+            '<div class="card__title">' + item.title + '</div>' +
+            '<div class="card__age"></div>' +
+            '</div>' +
+            '</div>');
 
         // Добавляем бейдж с информацией о подписке
         var status = item.last_episode ?
