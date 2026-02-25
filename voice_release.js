@@ -685,11 +685,14 @@
     function registerSubscriptionsComponent() {
         console.log('[VoiceRelease] registerSubscriptionsComponent вызвана');
         
-        var Component = {
-            onCreate: function() {
-                var _this = this;
-                console.log('[VoiceRelease] SubscriptionsComponent onCreate, items:', this.data.items ? this.data.items.length : 0);
-                
+        // Создаём конструктор компонента
+        function VoiceSubscriptionsComponent(data) {
+            var _this = this;
+            _this.data = data;
+            
+            console.log('[VoiceRelease] VoiceSubscriptionsComponent constructor, items:', _this.data.items ? _this.data.items.length : 0);
+            
+            _this.render = function() {
                 var scroll = new Lampa.Scroll({
                     step: 300,
                     visible: 5
@@ -728,14 +731,17 @@
                 });
 
                 Lampa.Controller.toggle('subscriptions_cards');
-            },
-            onDestroy: function() {
-                this.html.remove();
-                this.scroll.destroy();
-            }
-        };
+                
+                return _this.html;
+            };
+            
+            _this.destroy = function() {
+                _this.html.remove();
+                _this.scroll.destroy();
+            };
+        }
 
-        Lampa.Component.add('voice_subscriptions', Component);
+        Lampa.Component.add('voice_subscriptions', VoiceSubscriptionsComponent);
         console.log('[VoiceRelease] Компонент voice_subscriptions зарегистрирован');
     }
 
