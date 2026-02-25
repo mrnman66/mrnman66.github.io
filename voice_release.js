@@ -492,7 +492,7 @@
                         imdb_id: card.imdb_id,
                         title: card.title || card.name || card.original_title,
                         original_title: card.original_title,
-                        poster: card.poster,
+                        poster: card.poster || '',  // Сохраняем постер!
                         voice: item.voice,
                         provider: null,
                         last_episode: null,
@@ -501,6 +501,7 @@
                         added_at: Date.now()
                     };
 
+                    console.log('[VoiceRelease] Сохраняем в отслеживаемые:', trackingData.title, 'poster:', trackingData.poster);
                     saveTracking(trackingData);
                 }
 
@@ -626,6 +627,7 @@
         
         var tracking = getTracking();
         console.log('[VoiceRelease] Отслеживаемые сериалы:', tracking.length);
+        console.log('[VoiceRelease] Данные отслеживания:', tracking);
 
         if (tracking.length === 0) {
             // Показываем пустую страницу
@@ -649,6 +651,28 @@
             }
             return;
         }
+
+        // Проверяем и дополняем данные
+        tracking.forEach(function(item) {
+            if (!item.poster || item.poster.indexOf('img_load') >= 0) {
+                console.log('[VoiceRelease] Нет постера у:', item.title);
+                // Пытаемся получить постер из TMDB API
+                if (item.kinopoisk_id) {
+                    // Загружаем постер через TMDB API
+                    var network = new Lampa.Reguest();
+                    network.silent('https://api.themoviedb.org/3/find/' + item.kinopoisk_id + '?api_key=5201a6473776215954ea687b27a55f49&external_source=external_id', function(data) {
+                        if (data && data.tv_results && data.tv_results[0]) {
+                            item.poster = data.tv_results[0].poster_path;
+                        } else if (data && data.movie_results && data.movie_results[0]) {
+                            item.poster = data.movie_results[0].poster_path;
+                        }
+                        console.log('[VoiceRelease] Постер загружен:', item.poster);
+                    }, function() {}, false, { cache: { life: 60 } });
+                } else {
+                    item.poster = '/img/img_load.svg';
+                }
+            }
+        });
 
         // Открываем страницу с карточками
         Lampa.Activity.push({
