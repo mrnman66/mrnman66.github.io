@@ -345,14 +345,22 @@
     // ИНТЕРФЕЙС: КНОПКА "ОТСЛЕЖИВАТЬ"
     // ============================================
     function addTrackButton() {
-        // Проверяем, на странице ли сериала
+        // Получаем текущую активность
         var activity = Lampa.Activity.active();
-        if (!activity || !activity.card) {
+        if (!activity || !activity.activity) {
             return;
         }
 
+        var render = activity.activity.render();
+        if (!render) {
+            return;
+        }
+
+        // Проверяем, есть ли card
         var card = activity.card;
-        var render = activity.render();
+        if (!card) {
+            return;
+        }
 
         // Проверяем, сериал ли это
         var isSeries = card.type == 'tv' || card.number_of_seasons > 0;
@@ -368,7 +376,7 @@
 
         if (alreadyTracked) {
             // Уже отслеживается - показываем кнопку "Удалить"
-            addRemoveButton(render, alreadyTracked);
+            addRemoveButton(render, alreadyTracked, card);
         } else {
             // Не отслеживается - показываем кнопку "Добавить"
             addAddButton(render, card);
@@ -417,7 +425,7 @@
         }
     }
 
-    function addRemoveButton(render, trackedItem) {
+    function addRemoveButton(render, trackedItem, card) {
         // Удаляем старую кнопку если есть
         $('.voice-release-track-btn', render).remove();
 
@@ -445,7 +453,7 @@
             Lampa.Confirm.open({
                 title: 'Отключить отслеживание',
                 text: 'Вы действительно хотите отключить отслеживание сериала<br><b>' +
-                      trackedItem.title + '</b>?',
+                      (trackedItem.title || card.title) + '</b>?',
                 onConfirm: function() {
                     removeTracking(trackedItem.kinopoisk_id);
                     button.remove();
@@ -580,33 +588,26 @@
                 description: new Date(n.timestamp).toLocaleString(),
                 kinopoisk_id: n.kinopoisk_id,
                 poster: n.poster,
-                url: 'full/' + n.kinopoisk_id,
-                action: function() {
-                    Lampa.Activity.push({
-                        url: 'full/' + n.kinopoisk_id,
-                        id: n.kinopoisk_id,
-                        type: 'full'
-                    });
-                }
+                url: 'full/' + n.kinopoisk_id
             });
         });
 
         console.log('[VoiceRelease] Открытие уведомлений, элементов:', items.length);
 
-        // Открываем модальное окно с списком через Lampa.Modal
+        // Открываем модальное окно с списком
         Lampa.Modal.open({
             title: '🔔 Уведомления о новых сериях',
             size: 'large',
-            template: 'notice',
             items: items,
             onSelect: function(item) {
                 console.log('[VoiceRelease] Выбор уведомления:', item);
-                if (item && item.action) {
-                    item.action();
+                if (item && item.url) {
+                    Lampa.Activity.push({
+                        url: item.url,
+                        id: item.kinopoisk_id,
+                        type: 'full'
+                    });
                 }
-            },
-            onBack: function() {
-                console.log('[VoiceRelease] Закрыто уведомление');
             }
         });
     }
@@ -628,7 +629,7 @@
             return;
         }
 
-        // Создаём массив элементов
+        // Создаём массив элементов для модального окна
         var items = [];
         tracking.forEach(function(t) {
             var status = t.last_episode ?
@@ -639,29 +640,25 @@
                 subtitle: t.voice + ' • ' + status,
                 kinopoisk_id: t.kinopoisk_id,
                 poster: t.poster,
-                url: 'full/' + t.kinopoisk_id,
-                action: function() {
-                    Lampa.Activity.push({
-                        url: 'full/' + t.kinopoisk_id,
-                        id: t.kinopoisk_id,
-                        type: 'full'
-                    });
-                }
+                url: 'full/' + t.kinopoisk_id
             });
         });
 
         console.log('[VoiceRelease] Элементов в списке:', items.length);
 
-        // Открываем модальное окно с списком через Lampa.Modal
+        // Открываем модальное окно с списком
         Lampa.Modal.open({
             title: '📺 Отслеживаемые сериалы',
             size: 'large',
-            template: 'notice',
             items: items,
             onSelect: function(item) {
                 console.log('[VoiceRelease] Выбор сериала:', item);
-                if (item && item.action) {
-                    item.action();
+                if (item && item.url) {
+                    Lampa.Activity.push({
+                        url: item.url,
+                        id: item.kinopoisk_id,
+                        type: 'full'
+                    });
                 }
             },
             onContextMenu: function(item, element, callback) {
@@ -686,9 +683,6 @@
                         if (callback) callback();
                     }
                 });
-            },
-            onBack: function() {
-                console.log('[VoiceRelease] Закрыт список отслеживаемых');
             }
         });
     }
