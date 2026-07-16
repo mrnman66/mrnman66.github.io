@@ -14195,7 +14195,7 @@
           dataType: 'jsonp'
         }).done(function (json) {
           if (json && json.country_code) {
-            Lampa.Storage.set('online_mod_use_stream_proxy', '' + (json.country_code === 'UA'));
+            Lampa.Storage.set('online_mod_use_stream_proxy', '' + (json.country_code === 'RU'));
           }
         });
       }
