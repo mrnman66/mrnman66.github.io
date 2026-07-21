@@ -127,28 +127,30 @@ function addTranslations() {
     });
 }
 
-// ============================================================
-//  ИКОНКА (переиспользуется в меню и на кнопке)
-// ============================================================
+// иконка (переиспользуется в папке настроек и на кнопке карточки)
 var ICON_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 244 260" fill="none">' +
         '<path d="M242,88v170H10V88h41l-38,38h37.1l38-38h38.4l-38,38h38.4l38-38h38.3l-38,38H204L242,88z ' +
         'M228.9,2l8,37.7L191.2,10L228.9,2z M160.6,56l-45.8-29.7l38-8.1l45.8,29.7L160.6,56z ' +
         'M84.5,72.1L38.8,42.4l38-8.1l45.8,29.7L84.5,72.1z M10,88L2,50.2L47.8,80L10,88z" ' +
-        'fill="white"/>' +
+        'fill="currentColor"/>' +
     '</svg>';
 
 // ============================================================
 //  НАСТРОЙКИ
+//  ВАЖНО: папка создаётся один раз, строка прогоняется через
+//  Lang.translate (иначе #{pidtor_title} не заменится).
+//  Шаблон settings_pidtor рендерится самим механизмом Settings
+//  по data-component="pidtor" — вручную append делать НЕЛЬЗЯ,
+//  иначе будет два экземпляра параметров.
 // ============================================================
 function initSettings() {
-    // Имя папки подставляем УЖЕ переведённым — $() не обрабатывает #{...}
-    var field = $(
+    var field = $(Lampa.Lang.translate(
         '<div class="settings-folder selector" data-component="pidtor">' +
             '<div class="settings-folder__icon">' + ICON_SVG + '</div>' +
-            '<div class="settings-folder__name">' + Lampa.Lang.translate('pidtor_title') + '</div>' +
+            '<div class="settings-folder__name">#{pidtor_title}</div>' +
         '</div>'
-    );
+    ));
 
     var server_folder = Lampa.Settings.main().render().find('[data-component="server"]');
     if (server_folder.length) {
@@ -158,8 +160,7 @@ function initSettings() {
     }
     Lampa.Settings.main().update();
 
-    // Шаблон раздела. Ядро Lampa САМО вставит его в body и САМО забиндит/обновит
-    // поля (hover:enter, значения из Storage) — вручную append/bind/update НЕ нужны.
+    // Шаблон тела настроек. НЕ static → Settings сам сделает bind/update.
     Lampa.Template.add('settings_pidtor',
         '<div>' +
             '<div class="settings-param-title"><span>#{pidtor_settings_title}</span></div>' +
@@ -203,6 +204,8 @@ function initSettings() {
             '</div>' +
         '</div>'
     );
+
+    // listener 'open' с append УБРАН — он и создавал дубликат.
 }
 
 // ============================================================
@@ -225,7 +228,7 @@ function getCfg() {
 // ============================================================
 function searchTorrents(movie, callback, error) {
     var cfg = getCfg();
-    var query = movie.original_title || movie.title || '';
+    var query = movie.original_title || movie.title || movie.original_name || movie.name || '';
     if (!query) { error('No title'); return; }
 
     var url = cfg.redapi.replace(/\/+$/, '') + '/api/v2.0/indexers/all/results?apikey=' +
@@ -237,19 +240,20 @@ function searchTorrents(movie, callback, error) {
 
         results = results.filter(function (r) {
             if (cfg.minSid > 0 && (r.Seeders || 0) < cfg.minSid) return false;
-            if (cfg.maxSize > 0 && r.Size > cfg.maxSize * 1073741824) return false;
+            if (cfg.maxSize > 0 && (r.Size || 0) > cfg.maxSize * 1073741824) return false;
             if (cfg.filter) {
                 var words = cfg.filter.toLowerCase().split(',');
                 var title = (r.Title || '').toLowerCase();
                 for (var i = 0; i < words.length; i++) {
-                    if (words[i].trim() && title.indexOf(words[i].trim()) === -1) return false;
+                    var w = words[i].trim();
+                    if (w && title.indexOf(w) === -1) return false;
                 }
             }
             return true;
         });
 
-        var sortField = cfg.sort === 'sid'   ? 'Seeders'
-                      : cfg.sort === 'date'  ? 'PublishDate'
+        var sortField = cfg.sort === 'sid' ? 'Seeders'
+                      : cfg.sort === 'date' ? 'PublishDate'
                       : cfg.sort === 'title' ? 'Title' : 'Size';
 
         results.sort(function (a, b) {
@@ -263,43 +267,25 @@ function searchTorrents(movie, callback, error) {
     });
 }
 
-// ============================================================
-//  TORRSERVER
-// ============================================================
-function addToTorrs(magnet, title, poster, callback, error) {
-    var cfg = getCfg();
-    var url = cfg.torrs.replace(/\/+$/, '') + '/torrents';
-    $.ajax({
-        url: url,
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            title: title,
-            link: magnet,
-            poster: poster || '',
-            data: JSON.stringify({ lampa: true })
-        }),
-        success: function () { callback(); },
-        error: function (a, c) { error(Lampa.Network.errorDecode(a, c)); }
-    });
-}
-
-function playTorrent(hash, fileIndex, title) {
-    var cfg = getCfg();
-    var url = cfg.torrs.replace(/\/+$/, '') + '/stream/' +
-              encodeURIComponent(hash) + '?index=' + (fileIndex || 1) + '&play';
-    Lampa.Player.play({
-        title: title,
-        url: url,
-        type: 'torrent'
-    });
+// постер карточки в формате, который понимает TorrServer
+function posterOf(movie) {
+    if (movie.img) return movie.img;
+    if (movie.poster) return movie.poster;
+    if (movie.poster_path) {
+        try { return Lampa.TMDB.image('t/p/w300' + movie.poster_path); } catch (e) {}
+    }
+    return '';
 }
 
 // ============================================================
 //  КАРТОЧКА РЕЗУЛЬТАТА
+//  HTML прогоняем через translate (иначе #{pidtor_seeds} и т.п.
+//  останутся как есть). Запуск — штатным Lampa.Torrent.start,
+//  который сам шлёт корректный add в TorrServer (с action:"add")
+//  и сам открывает выбор файла / плеер. Это убирает 400 Bad Request.
 // ============================================================
 function createCard(item, movie) {
-    var card = $(
+    var card = $(Lampa.Lang.translate(
         '<div class="torrent-item selector layer--visible layer--render">' +
             '<div class="torrent-item__title">' + Lampa.Utils.shortText(item.Title || '', 80) + '</div>' +
             '<div class="torrent-item__details">' +
@@ -307,37 +293,30 @@ function createCard(item, movie) {
                 '<div class="torrent-item__seeds">#{pidtor_seeds}: <span>' + (item.Seeders || 0) + '</span></div>' +
                 '<div class="torrent-item__grabs">#{pidtor_size}: <span>' +
                     Lampa.Utils.bytesToSize(item.Size || 0) + '</span></div>' +
-                '<div class="torrent-item__size">' + (item.PublishDate || '') + '</div>' +
+                '<div class="torrent-item__date">' + (item.PublishDate || '') + '</div>' +
             '</div>' +
         '</div>'
-    );
-    card = $(Lampa.Lang.translate(card[0].outerHTML));
+    ));
 
     card.on('hover:enter', function () {
+        if (!Lampa.Torrent || !Lampa.Torrent.start) {
+            Lampa.Noty.show(Lampa.Lang.translate('pidtor_no_torrs'));
+            return;
+        }
         var magnet = item.MagnetUri || item.Link || '';
-        if (!magnet) {
+        if (!magnet && !item.InfoHash) {
             Lampa.Noty.show(Lampa.Lang.translate('pidtor_error'));
             return;
         }
-        Lampa.Noty.show(Lampa.Lang.translate('pidtor_added'));
-        addToTorrs(
-            magnet,
-            (movie.title || '') + ' / ' + (movie.original_title || ''),
-            movie.poster_path ? Lampa.TMDB.image('t/p/w200' + movie.poster_path) : '',
-            function () {
-                playTorrent(item.InfoHash || '', 1, item.Title || movie.title);
-            },
-            function (err) {
-                Lampa.Noty.show(err);
-            }
-        );
+        item.poster = posterOf(movie);
+        Lampa.Torrent.start(item, movie);
     });
 
     return card;
 }
 
 // ============================================================
-//  КОМПОНЕНТ
+//  КОМПОНЕНТ СПИСКА
 // ============================================================
 function component(object) {
     var scroll = new Lampa.Scroll({ mask: true, over: true });
@@ -367,9 +346,12 @@ function component(object) {
         }
 
         var head = $('<div class="explorer__files-head"></div>');
-        var filter = $('<div class="simple-button selector filter--back" style="margin:0 0 1em 0">' +
-            '<span>#{pidtor_search}: ' + (object.movie.title || '') + ' (' + results.length + ')</span></div>');
-        filter = $(Lampa.Lang.translate(filter[0].outerHTML));
+        // шапку тоже переводим
+        var filter = $(Lampa.Lang.translate(
+            '<div class="simple-button selector filter--back" style="margin:0 0 1em 0">' +
+                '<span>#{pidtor_search}: ' + (object.movie.title || '') + ' (' + results.length + ')</span>' +
+            '</div>'
+        ));
         head.append(filter);
         scroll.minus(head);
 
@@ -426,12 +408,11 @@ var pidtor_loading = false;
 function loadPidTor(object) {
     if (pidtor_loading) return;
     pidtor_loading = true;
-    Lampa.Component.add('pidtor', component);
     Lampa.Activity.push({
         url: '',
         title: Lampa.Lang.translate('pidtor_title'),
         component: 'pidtor',
-        search: object.title,
+        search: object.title || object.name || '',
         movie: object,
         page: 1
     });
@@ -445,15 +426,17 @@ function init() {
     addTranslations();
     initSettings();
 
+    // регистрируем компонент один раз
     Lampa.Component.add('pidtor', component);
 
+    // манифест плагина (type: video → пункт в контекстном меню)
     var manifest = {
         type: 'video',
         version: mod_version,
         name: Lampa.Lang.translate('pidtor_title') + ' ' + mod_version,
         description: Lampa.Lang.translate('pidtor_search'),
         component: 'pidtor',
-        onContextMenu: function (object) {
+        onContextMenu: function () {
             return {
                 name: Lampa.Lang.translate('pidtor_watch'),
                 description: Lampa.Lang.translate('pidtor_search')
@@ -466,15 +449,10 @@ function init() {
     };
     Lampa.Manifest.plugins = manifest;
 
+    // кнопка на странице карточки
     var buttonHtml =
         '<div class="full-start__button selector view--pidtor" data-subtitle="PidTor ' + mod_version + '">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 244 260" fill="none" ' +
-                'width="24" height="24" style="vertical-align:middle">' +
-                '<path d="M242,88v170H10V88h41l-38,38h37.1l38-38h38.4l-38,38h38.4l38-38h38.3l-38,38H204L242,88z ' +
-                'M228.9,2l8,37.7L191.2,10L228.9,2z M160.6,56l-45.8-29.7l38-8.1l45.8,29.7L160.6,56z ' +
-                'M84.5,72.1L38.8,42.4l38-8.1l45.8,29.7L84.5,72.1z M10,88L2,50.2L47.8,80L10,88z" ' +
-                'fill="currentColor"/>' +
-            '</svg>' +
+            '<span style="display:inline-block;width:24px;height:24px;vertical-align:middle">' + ICON_SVG + '</span>' +
             '<span>#{pidtor_title}</span>' +
         '</div>';
 
