@@ -202,7 +202,7 @@
 
     // ==================== TORRSERVER ====================
     function addToTorrServer(magnet, title, poster, onSuccess, onError) {
-        var tsUrl = CONFIG.torrs[0] || 'http://127.0.0.1:8090';
+        var tsUrl = CONFIG.torrs[0];
         var xhr = new XMLHttpRequest();
 
         xhr.open('POST', tsUrl + '/torrents', true);
