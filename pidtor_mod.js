@@ -242,7 +242,7 @@
     }
 
     function getStreamUrl(hash, fileIndex) {
-        var tsUrl = CONFIG.torrs[0] || 'http://127.0.0.1:8090';
+        var tsUrl = CONFIG.torrs[0];
         var url = tsUrl + '/stream?hash=' + encodeURIComponent(hash);
         if (fileIndex !== undefined) url += '&id=' + fileIndex;
         if (CONFIG.torrs_auth.login) {
