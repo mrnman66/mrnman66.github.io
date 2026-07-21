@@ -1,29 +1,34 @@
 (function() {
     "use strict";
 
-    const DEFAULTS = {
-        min_seeders: 5,
-        max_size_gb: 50,
-        max_serial_size_gb: 10,
-        quality_priority: ['4K', '2160p', '1080p', '720p']
+    // --- КОНФИГУРАЦИЯ ---
+    const CONFIG = {
+        proxy_url: 'https://lampac.club/proxy/',
+        quality_priority: ['4K', '2160p', '1080p', '720p'],
+        max_serial_size_gb: 10
     };
 
     const addedHashes = new Set();
+
+    // Получение значений из настроек или дефолтных значений
+    function getVal(key, def) {
+        let val = Lampa.Storage.get(key);
+        return val === undefined || val === null ? def : val;
+    }
 
     function getConfig() {
         return {
             jacred_api: Lampa.Storage.cache('jackett_url') || 'https://jacred.xyz',
             torrserver_host: Lampa.Storage.cache('torrserver_url') || 'http://192.168.1.100:8090',
-            min_seeders: parseInt(Lampa.Storage.get('plugin_pidtor_min_sid')) || DEFAULTS.min_seeders,
-            max_size_gb: parseFloat(Lampa.Storage.get('plugin_pidtor_max_size')) || DEFAULTS.max_size_gb,
-            proxy_url: 'https://lampac.club/proxy/'
+            min_seeders: parseInt(getVal('plugin_pidtor_min_sid', 5)),
+            max_size_gb: parseFloat(getVal('plugin_pidtor_max_size', 50))
         };
     }
 
     async function fetchWithProxy(url) {
         const config = getConfig();
         try {
-            const response = await fetch(`${config.proxy_url}${encodeURIComponent(url)}`);
+            const response = await fetch(`${CONFIG.proxy_url}${encodeURIComponent(url)}`);
             if (!response.ok) return null;
             return await response.json();
         } catch (e) { return null; }
@@ -45,7 +50,7 @@
         return 'SD';
     }
 
-    // --- НАСТРОЙКИ ЧЕРЕЗ Lampa.Params ---
+    // --- НАСТРОЙКИ (Методика из online_mod.js) ---
     function registerSettings() {
         Lampa.SettingsApi.addComponent({
             component: 'pidtor',
@@ -53,31 +58,26 @@
             name: 'PidTor (JacRed)'
         });
 
-        // Функция-помощник для добавления параметров ввода
-        const addInputParam = (name, key, defaultVal, label) => {
+        const addParam = (name, key, label, def) => {
             Lampa.SettingsApi.addParam({
                 component: 'pidtor',
-                param: { 
-                    type: 'button' // Используем кнопку для вызова ввода
-                },
+                param: { type: 'button' },
                 field: { 
                     name: label, 
-                    value: String(Lampa.Storage.get(key) || defaultVal) 
+                    value: String(getVal(key, def)) 
                 },
                 onChange: () => {
-                    let current = Lampa.Storage.get(key) || defaultVal;
-                    // Вызываем стандартный ввод через Params
-                    Lampa.Params.select(key, '', String(current), (val) => {
+                    // Используем Lampa.Params.select как в online_mod.js
+                    Lampa.Params.select(key, '', String(getVal(key, def)), (val) => {
                         Lampa.Storage.set(key, val);
-                        // Обновляем значение в интерфейсе настроек
                         Lampa.SettingsApi.updateParam('pidtor', name, { value: val });
                     });
                 }
             });
         };
 
-        addInputParam('min_sid', 'plugin_pidtor_min_sid', DEFAULTS.min_seeders, 'Мин. сидов');
-        addInputParam('max_size', 'plugin_pidtor_max_size', DEFAULTS.max_size_gb, 'Макс. размер (ГБ)');
+        addParam('min_sid', 'plugin_pidtor_min_sid', 'Мин. сидов', 5);
+        addParam('max_size', 'plugin_pidtor_max_size', 'Макс. размер (ГБ)', 50);
     }
 
     function startPlugin() {
@@ -108,7 +108,7 @@
                     let isSerial = object.type === 'tv';
                     
                     if (item.Seeders < config.min_seeders) continue;
-                    if (sizeGb > (isSerial ? DEFAULTS.max_serial_size_gb : config.max_size_gb)) continue;
+                    if (sizeGb > (isSerial ? CONFIG.max_serial_size_gb : config.max_size_gb)) continue;
 
                     results.push({
                         title: item.Title,
@@ -125,8 +125,8 @@
                 }
 
                 results.sort((a, b) => {
-                    let qA = DEFAULTS.quality_priority.indexOf(a.quality);
-                    let qB = DEFAULTS.quality_priority.indexOf(b.quality);
+                    let qA = CONFIG.quality_priority.indexOf(a.quality);
+                    let qB = CONFIG.quality_priority.indexOf(b.quality);
                     if (qA !== qB) return qA - qB;
                     return b.seeders - a.seeders;
                 });
@@ -161,7 +161,7 @@
                                 }
                             });
                         } else {
-                            Lampa.Noty.show('Нет видеофайлов в торренте');
+                            Lampa.Noty.show('Нет видеофайлов');
                         }
                     }
                 } else {
