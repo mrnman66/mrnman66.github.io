@@ -45,7 +45,7 @@
         return 'SD';
     }
 
-    // --- НАСТРОЙКИ ЧЕРЕЗ SettingsApi (Безопасный метод) ---
+    // --- НАСТРОЙКИ ЧЕРЕЗ Lampa.Params ---
     function registerSettings() {
         Lampa.SettingsApi.addComponent({
             component: 'pidtor',
@@ -53,30 +53,31 @@
             name: 'PidTor (JacRed)'
         });
 
-        const createInputParam = (name, key, defaultVal, label) => {
+        // Функция-помощник для добавления параметров ввода
+        const addInputParam = (name, key, defaultVal, label) => {
             Lampa.SettingsApi.addParam({
                 component: 'pidtor',
-                param: { type: 'button' },
+                param: { 
+                    type: 'button' // Используем кнопку для вызова ввода
+                },
                 field: { 
                     name: label, 
-                    value: Lampa.Storage.get(key) || defaultVal 
+                    value: String(Lampa.Storage.get(key) || defaultVal) 
                 },
                 onChange: () => {
                     let current = Lampa.Storage.get(key) || defaultVal;
-                    Lampa.Keyboard.primitive({
-                        value: String(current),
-                        onChange: (val) => {
-                            Lampa.Storage.set(key, val);
-                            // Обновляем отображение значения в меню
-                            Lampa.SettingsApi.updateParam('pidtor', name, { value: val });
-                        }
+                    // Вызываем стандартный ввод через Params
+                    Lampa.Params.select(key, '', String(current), (val) => {
+                        Lampa.Storage.set(key, val);
+                        // Обновляем значение в интерфейсе настроек
+                        Lampa.SettingsApi.updateParam('pidtor', name, { value: val });
                     });
                 }
             });
         };
 
-        createInputParam('min_sid', 'plugin_pidtor_min_sid', DEFAULTS.min_seeders, 'Мин. сидов');
-        createInputParam('max_size', 'plugin_pidtor_max_size', DEFAULTS.max_size_gb, 'Макс. размер (ГБ)');
+        addInputParam('min_sid', 'plugin_pidtor_min_sid', DEFAULTS.min_seeders, 'Мин. сидов');
+        addInputParam('max_size', 'plugin_pidtor_max_size', DEFAULTS.max_size_gb, 'Макс. размер (ГБ)');
     }
 
     function startPlugin() {
@@ -101,7 +102,6 @@
 
                 let results = [];
                 for (let item of data.Results) {
-                    // Строгая проверка наличия обязательных полей
                     if (!item.Title || !item.MagnetUri || !item.InfoHash) continue;
 
                     let sizeGb = item.Size / (1024 * 1024 * 1024);
@@ -111,14 +111,13 @@
                     if (sizeGb > (isSerial ? DEFAULTS.max_serial_size_gb : config.max_size_gb)) continue;
 
                     results.push({
-                        title: item.Title, // Обязательно строка
+                        title: item.Title,
                         magnet: item.MagnetUri,
                         size: item.Size,
                         seeders: item.Seeders,
                         quality: parseQuality(item.Title),
                         hash: item.InfoHash,
                         is_serial: isSerial,
-                        // Добавляем заглушки для полей, которые Lampa может ожидать
                         original_title: item.Title,
                         poster: '', 
                         rating: 0
