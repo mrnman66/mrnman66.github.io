@@ -10,7 +10,7 @@
         redapi: 'http://jac.red',
         apikey: '',
         // TorrServer
-        torrs: ['http://127.0.0.1:8090'],
+        torrs: ['192.168.10.167:8090'],
         torrs_auth: { login: '', password: '' },
         // Фильтры
         min_sid: 1,
