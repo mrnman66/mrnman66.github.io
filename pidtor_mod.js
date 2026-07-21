@@ -1,524 +1,443 @@
 (function () {
     'use strict';
 
-    // ===== КОНФИГУРАЦИЯ =====
+    // ==================== КОНФИГУРАЦИЯ ====================
     var CONFIG = {
-        name: 'JacRed',
+        name: 'PidTor',
         version: '1.2.0',
-        api_url: 'https://jacred.xyz',
-        api_key: '',
-        torrserver_url: '192.168.10.167:8090',
-        torrserver_auth: false,
-        torrserver_login: '',
-        torrserver_password: '',
+        description: 'Поиск торрентов через JacRed API',
+        // JacRed API
+        redapi: 'http://jac.red',
+        apikey: '',
+        // TorrServer
+        torrs: ['http://127.0.0.1:8090'],
+        torrs_auth: { login: '', password: '' },
+        // Фильтры
         min_sid: 1,
-        max_size: 0, // 0 = без лимита (в байтах)
-        sort: 'sid', // sid, size, date
-        filter_quality: '', // '', '720p', '1080p', '2160p'
-        filter_voice: '',
-        cache_time: 40 * 60 * 1000 // 40 минут
+        max_size: 0,          // 0 = без лимита (в GB)
+        force_quality: '',    // '', '720p', '1080p', '2160p'
+        sort: 'sid',          // sid, size, date, name
+        filter_voice: '',     // '', 'Дубляж', 'Многоголосый', etc.
+        filter_ignore: '',    // игнорируемые слова
+        // UI
+        displayname: 'PidTor',
+        group: 'torrents',
+        // Кеш (минуты)
+        cache_time: 40
     };
 
-    // ===== УТИЛИТЫ =====
+    // ==================== УТИЛИТЫ ====================
     function bytesToSize(bytes) {
-        if (bytes === 0) return '0 Б';
-        var sizes = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+        if (!bytes || isNaN(bytes)) return '0 B';
+        var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         var i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+        return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
     }
 
-    function formatDate(dateStr) {
-        if (!dateStr || dateStr === '2000-01-01') return '';
+    function parseDate(dateStr) {
+        if (!dateStr) return '';
         try {
             var d = new Date(dateStr);
-            return d.toLocaleDateString('ru-RU');
+            if (isNaN(d.getTime())) return dateStr;
+            var dd = ('0' + d.getDate()).slice(-2);
+            var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+            var yyyy = d.getFullYear();
+            return dd + '.' + mm + '.' + yyyy;
         } catch (e) {
             return dateStr;
         }
     }
 
-    function parseSize(sizeStr) {
-        if (!sizeStr) return 0;
-        if (typeof sizeStr === 'number') return sizeStr;
-        var match = sizeStr.match(/([\d.]+)\s*(TB|GB|MB|KB|B|ТБ|ГБ|МБ|КБ)/i);
-        if (!match) return parseInt(sizeStr) || 0;
-        var val = parseFloat(match[1]);
-        var unit = match[2].toUpperCase();
-        var multipliers = { 'B': 1, 'Б': 1, 'KB': 1024, 'КБ': 1024, 'MB': 1048576, 'МБ': 1048576, 'GB': 1073741824, 'ГБ': 1073741824, 'TB': 1099511627776, 'ТБ': 1099511627776 };
-        return Math.round(val * (multipliers[unit] || 1));
-    }
-
-    function detectQuality(title) {
-        title = title.toLowerCase();
-        if (/2160p|4k|uhd|ultra\s*hd/.test(title)) return '2160p';
-        if (/1080p|full\s*hd|fullhd/.test(title)) return '1080p';
+    function getQualityFromTitle(title) {
+        title = (title || '').toLowerCase();
+        if (/2160p|4k|uhd/.test(title)) return '2160p';
+        if (/1080p|fullhd/.test(title)) return '1080p';
         if (/720p/.test(title)) return '720p';
         if (/480p|dvd/.test(title)) return '480p';
         return '';
     }
 
-    function detectVoice(title) {
-        title = title.toLowerCase();
+    function getVoiceFromTitle(title) {
+        title = (title || '').toLowerCase();
         if (/дубляж|дублирован|dub/.test(title)) return 'Дубляж';
-        if (/многоголос|пм|лм/.test(title)) return 'Многоголосый';
-        if (/двухголос|двуголос|лд|пд/.test(title)) return 'Двухголосый';
-        if (/авторск|одноголос|ло|ап/.test(title)) return 'Авторский';
+        if (/многоголос|многоголосый/.test(title)) return 'Многоголосый';
+        if (/двухголос|двуголос/.test(title)) return 'Двухголосый';
+        if (/любитель|авторск/.test(title)) return 'Любительский';
+        if (/субтитр|sub/.test(title)) return 'Субтитры';
         return '';
     }
 
-    function detectHDR(title) {
-        title = title.toLowerCase();
+    function getHDR(title) {
+        title = (title || '').toLowerCase();
         if (/hdr10\+|hdr10plus/.test(title)) return 'HDR10+';
-        if (/dolby\s*vision|dv/.test(title)) return 'Dolby Vision';
+        if (/hdr10/.test(title)) return 'HDR10';
         if (/hdr/.test(title)) return 'HDR';
+        if (/dolby\s*vision/.test(title)) return 'DV';
         return '';
     }
 
-    // ===== КЕШ =====
-    var cache = {};
+    // ==================== СЕТЬ ====================
+    function apiRequest(url, params, onSuccess, onError) {
+        var xhr = new XMLHttpRequest();
+        var fullUrl = url;
 
-    function cacheGet(key) {
-        var item = cache[key];
-        if (item && Date.now() - item.time < CONFIG.cache_time) {
-            return item.data;
-        }
-        delete cache[key];
-        return null;
-    }
-
-    function cacheSet(key, data) {
-        cache[key] = { data: data, time: Date.now() };
-    }
-
-    // ===== API ЗАПРОСЫ =====
-    function apiSearch(params, onSuccess, onError) {
-        var cacheKey = JSON.stringify(params);
-        var cached = cacheGet(cacheKey);
-        if (cached) {
-            onSuccess(cached);
-            return;
+        if (params) {
+            var qs = [];
+            for (var k in params) {
+                if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+                    qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
+                }
+            }
+            if (qs.length) fullUrl += '?' + qs.join('&');
         }
 
-        var url = CONFIG.api_url + '/api/v2.0/indexers/all/results';
-        var queryParams = [];
+        xhr.open('GET', fullUrl, true);
+        xhr.timeout = 15000;
 
-        if (params.query) queryParams.push('query=' + encodeURIComponent(params.query));
-        if (params.title) queryParams.push('title=' + encodeURIComponent(params.title));
-        if (params.original_title) queryParams.push('original_title=' + encodeURIComponent(params.original_title));
-        if (params.year) queryParams.push('year=' + params.year);
-        if (params.season) queryParams.push('season=' + params.season);
-        if (params.is_serial) queryParams.push('is_serial=true');
-        if (CONFIG.api_key) queryParams.push('apikey=' + CONFIG.api_key);
+        if (CONFIG.apikey) {
+            xhr.setRequestHeader('X-Api-Key', CONFIG.apikey);
+        }
 
-        if (queryParams.length) url += '?' + queryParams.join('&');
+        xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    onSuccess(data);
+                } catch (e) {
+                    onError('JSON parse error: ' + e.message);
+                }
+            } else {
+                onError('HTTP ' + xhr.status);
+            }
+        };
 
-        Lampa.Network.timeout(15000);
-        Lampa.Network.silent(url, function (data) {
-            var results = parseResults(data);
-            cacheSet(cacheKey, results);
+        xhr.onerror = function () {
+            onError('Network error');
+        };
+
+        xhr.ontimeout = function () {
+            onError('Timeout');
+        };
+
+        xhr.send();
+    }
+
+    // ==================== ПОИСК ТОРРЕНТОВ ====================
+    function searchTorrents(query, params, onSuccess, onError) {
+        var searchParams = {
+            query: query,
+            apikey: CONFIG.apikey || undefined
+        };
+
+        if (params) {
+            if (params.season) searchParams.season = params.season;
+            if (params.year) searchParams.year = params.year;
+        }
+
+        var url = CONFIG.redapi + '/api/v2.0/indexers/all/results';
+
+        apiRequest(url, searchParams, function (data) {
+            var results = data.Results || data.results || [];
+            results = filterAndSort(results);
             onSuccess(results);
-        }, function (error) {
-            onError(error);
-        });
+        }, onError);
     }
 
-    function parseResults(data) {
-        var results = [];
-        var items = data.Results || data.results || data || [];
+    function filterAndSort(results) {
+        // Фильтрация
+        results = results.filter(function (item) {
+            var title = (item.Title || item.title || '').toLowerCase();
 
-        if (!Array.isArray(items)) return results;
+            // Минимум сидов
+            if (CONFIG.min_sid > 0 && (item.Seeders || item.seeders || 0) < CONFIG.min_sid) {
+                return false;
+            }
 
-        items.forEach(function (item) {
-            var title = item.Title || item.title || item.name || '';
-            var size = parseSize(item.Size || item.size || 0);
-            var seeders = parseInt(item.Seeders || item.seeders || item.seed || 0);
-            var peers = parseInt(item.Peers || item.peers || item.leech || 0);
-            var magnet = item.MagnetUri || item.magnet || item.infohash || '';
-            var tracker = item.Tracker || item.tracker || item.source || 'JacRed';
-            var date = item.PublishDate || item.date || item.publish_date || '';
-            var link = item.Link || item.link || item.download || '';
+            // Максимальный размер
+            if (CONFIG.max_size > 0) {
+                var sizeGB = (item.Size || item.size || 0) / (1024 * 1024 * 1024);
+                if (sizeGB > CONFIG.max_size) return false;
+            }
 
-            if (!title) return;
-            if (seeders < CONFIG.min_sid) return;
-            if (CONFIG.max_size > 0 && size > CONFIG.max_size) return;
+            // Качество
+            if (CONFIG.force_quality) {
+                var q = getQualityFromTitle(title);
+                if (q && q !== CONFIG.force_quality) return false;
+            }
 
-            var quality = detectQuality(title);
-            if (CONFIG.filter_quality && quality !== CONFIG.filter_quality) return;
+            // Озвучка
+            if (CONFIG.filter_voice) {
+                var v = getVoiceFromTitle(title);
+                if (v && v !== CONFIG.filter_voice) return false;
+            }
 
-            results.push({
-                Title: title,
-                Size: size,
-                size: bytesToSize(size),
-                Seeders: seeders,
-                Peers: peers,
-                MagnetUri: magnet,
-                Link: link,
-                Tracker: tracker,
-                PublishDate: date,
-                date: formatDate(date),
-                quality: quality,
-                voice: detectVoice(title),
-                hdr: detectHDR(title),
-                hash: magnet.replace('magnet:?xt=urn:btih:', '').split('&')[0] || Lampa.Utils.hash(title + size)
-            });
+            // Игнорируемые слова
+            if (CONFIG.filter_ignore) {
+                var ignoreWords = CONFIG.filter_ignore.toLowerCase().split(',');
+                for (var i = 0; i < ignoreWords.length; i++) {
+                    if (title.indexOf(ignoreWords[i].trim()) >= 0) return false;
+                }
+            }
+
+            return true;
         });
 
-        return sortResults(results);
-    }
-
-    function sortResults(results) {
-        var sort = CONFIG.sort;
+        // Сортировка
         results.sort(function (a, b) {
-            if (sort === 'size') return b.Size - a.Size;
-            if (sort === 'date') return new Date(b.PublishDate) - new Date(a.PublishDate);
-            return b.Seeders - a.Seeders; // по умолчанию по сидам
+            switch (CONFIG.sort) {
+                case 'size':
+                    return (b.Size || b.size || 0) - (a.Size || a.size || 0);
+                case 'date':
+                    return new Date(b.PublishDate || b.publishDate || 0) - new Date(a.PublishDate || a.publishDate || 0);
+                case 'name':
+                    return (a.Title || a.title || '').localeCompare(b.Title || b.title || '');
+                case 'sid':
+                default:
+                    return (b.Seeders || b.seeders || 0) - (a.Seeders || a.seeders || 0);
+            }
         });
+
         return results;
     }
 
-    // ===== TORRSERVER =====
-    function torrserverAdd(magnet, title, poster, onSuccess, onError) {
-        var url = CONFIG.torrserver_url + '/torrents';
-        var data = {
+    // ==================== TORRSERVER ====================
+    function addToTorrServer(magnet, title, poster, onSuccess, onError) {
+        var tsUrl = CONFIG.torrs[0] || 'http://127.0.0.1:8090';
+        var xhr = new XMLHttpRequest();
+
+        xhr.open('POST', tsUrl + '/torrents', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+
+        if (CONFIG.torrs_auth.login) {
+            var auth = btoa(CONFIG.torrs_auth.login + ':' + CONFIG.torrs_auth.password);
+            xhr.setRequestHeader('Authorization', 'Basic ' + auth);
+        }
+
+        xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    onSuccess(resp);
+                } catch (e) {
+                    onSuccess({});
+                }
+            } else {
+                onError('TorrServer HTTP ' + xhr.status);
+            }
+        };
+
+        xhr.onerror = function () { onError('TorrServer connection error'); };
+        xhr.ontimeout = function () { onError('TorrServer timeout'); };
+        xhr.timeout = 10000;
+
+        var body = {
             action: 'add',
             link: magnet,
-            title: title,
+            title: title || '',
             poster: poster || '',
             save_to_db: true
         };
 
-        var headers = { 'Content-Type': 'application/json' };
-        if (CONFIG.torrserver_auth) {
-            headers['Authorization'] = 'Basic ' + btoa(CONFIG.torrserver_login + ':' + CONFIG.torrserver_password);
-        }
-
-        $.ajax({
-            url: url,
-            type: 'POST',
-            data: JSON.stringify(data),
-            headers: headers,
-            timeout: 15000,
-            success: function (res) {
-                if (onSuccess) onSuccess(res);
-            },
-            error: function (err) {
-                if (onError) onError(err);
-            }
-        });
+        xhr.send(JSON.stringify(body));
     }
 
-    function torrserverStream(hash, fileIndex, onSuccess, onError) {
-        var url = CONFIG.torrserver_url + '/stream?hash=' + hash;
+    function getStreamUrl(hash, fileIndex) {
+        var tsUrl = CONFIG.torrs[0] || 'http://127.0.0.1:8090';
+        var url = tsUrl + '/stream?hash=' + encodeURIComponent(hash);
         if (fileIndex !== undefined) url += '&id=' + fileIndex;
-
-        var headers = {};
-        if (CONFIG.torrserver_auth) {
-            headers['Authorization'] = 'Basic ' + btoa(CONFIG.torrserver_login + ':' + CONFIG.torrserver_password);
+        if (CONFIG.torrs_auth.login) {
+            url += '&login=' + encodeURIComponent(CONFIG.torrs_auth.login);
+            url += '&password=' + encodeURIComponent(CONFIG.torrs_auth.password);
         }
-
-        $.ajax({
-            url: url,
-            type: 'GET',
-            headers: headers,
-            timeout: 30000,
-            success: function (res) {
-                if (onSuccess) onSuccess(res);
-            },
-            error: function (err) {
-                if (onError) onError(err);
-            }
-        });
+        return url;
     }
 
-    // ===== КОМПОНЕНТ ПОИСКА =====
-    function JacRedSearch(object) {
+    // ==================== UI: КАРТОЧКА ТОРРЕНТА ====================
+    function createTorrentCard(item, movie) {
+        var title = item.Title || item.title || 'Без названия';
+        var size = bytesToSize(item.Size || item.size || 0);
+        var seeds = item.Seeders || item.seeders || 0;
+        var peers = item.Peers || item.peers || 0;
+        var tracker = item.Tracker || item.tracker || '';
+        var date = parseDate(item.PublishDate || item.publishDate || '');
+        var quality = getQualityFromTitle(title);
+        var voice = getVoiceFromTitle(title);
+        var hdr = getHDR(title);
+
+        var html = '<div class="torrent-item selector layer--visible layer--render">';
+        html += '<div class="torrent-item__title">' + Lampa.Utils.shortText(title, 80) + '</div>';
+        html += '<div class="torrent-item__details">';
+        if (date) html += '<div class="torrent-item__date">' + date + '</div>';
+        if (tracker) html += '<div class="torrent-item__tracker">' + tracker + '</div>';
+        html += '<div class="torrent-item__seeds">Сиды: <span>' + seeds + '</span></div>';
+        html += '<div class="torrent-item__grabs">Пиры: <span>' + peers + '</span></div>';
+        html += '<div class="torrent-item__size">' + size + '</div>';
+        html += '</div>';
+
+        // Метки качества
+        html += '<div class="torrent-item__tags">';
+        if (quality) html += '<span class="tag tag--quality">' + quality + '</span>';
+        if (hdr) html += '<span class="tag tag--hdr">' + hdr + '</span>';
+        if (voice) html += '<span class="tag tag--voice">' + voice + '</span>';
+        html += '</div>';
+
+        html += '</div>';
+
+        var elem = $(html);
+
+        // События
+        elem.on('hover:focus', function (e) {
+            if (this._onFocus) this._onFocus(e);
+        });
+
+        elem.on('hover:enter', function (e) {
+            if (this._onEnter) this._onEnter(e);
+        });
+
+        elem.on('hover:long', function (e) {
+            if (this._onLong) this._onLong(e);
+        });
+
+        elem[0]._item = item;
+        elem[0]._movie = movie;
+
+        return elem;
+    }
+
+    // ==================== КОМПОНЕНТ: СПИСОК ТОРРЕНТОВ ====================
+    function PidTorComponent(object) {
         var scroll = new Lampa.Scroll({ mask: true, over: true });
-        var html = $('<div class="jacred-search"></div>');
+        var html = $('<div class="pidtor-component"></div>');
         var results = [];
-        var filtred = [];
         var last = null;
-        var filter_data = {
-            quality: '',
-            voice: '',
-            tracker: '',
-            sort: CONFIG.sort
-        };
+        var initialized = false;
 
         this.create = function () {
             return this.render();
         };
 
         this.initialize = function () {
-            this.activity.loader(true);
-            this.search();
-            return this.render();
-        };
-
-        this.search = function () {
             var self = this;
-            var params = {
-                title: object.movie.title || object.search || '',
-                original_title: object.movie.original_title || '',
-                year: object.movie.release_date ? object.movie.release_date.slice(0, 4) : '',
-                is_serial: Boolean(object.movie.original_name || object.movie.name),
-                season: object.season || ''
-            };
+            this.activity.loader(true);
 
-            apiSearch(params, function (data) {
+            var query = object.search || object.movie.title || '';
+            var params = {};
+
+            if (object.movie.original_name) {
+                params.season = object.season || 1;
+            }
+            if (object.movie.release_date) {
+                params.year = (object.movie.release_date + '').slice(0, 4);
+            }
+
+            searchTorrents(query, params, function (data) {
                 results = data;
-                filtred = data;
                 self.build();
                 self.activity.loader(false);
                 self.activity.toggle();
-            }, function (error) {
-                self.empty('Ошибка поиска: ' + (error.message || 'неизвестная ошибка'));
+            }, function (err) {
+                self.showError('Ошибка поиска: ' + err);
                 self.activity.loader(false);
                 self.activity.toggle();
             });
+
+            scroll.onEnd = function () {
+                // Пагинация если нужна
+            };
+
+            return this.render();
         };
 
         this.build = function () {
             var self = this;
-            scroll.clear();
-            scroll.reset();
 
-            if (!filtred.length) {
-                this.empty('По вашему запросу ничего не найдено.');
+            if (!results.length) {
+                this.showEmpty();
                 return;
             }
 
-            // Панель фильтров
-            var filterPanel = this.buildFilterPanel();
-            scroll.append(filterPanel);
+            // Заголовок
+            var head = $('<div class="pidtor-head">');
+            head.append('<div class="pidtor-head__title">Торренты (' + results.length + ')</div>');
+            head.append('<div class="pidtor-head__source">JacRed</div>');
+            html.append(head);
 
-            // Результаты
-            filtred.forEach(function (item, index) {
-                var card = self.createCard(item, index);
+            // Список
+            results.forEach(function (item) {
+                var card = createTorrentCard(item, object.movie);
+
+                card[0]._onFocus = function (e) {
+                    last = e.target;
+                    scroll.update($(e.target), true);
+                };
+
+                card[0]._onEnter = function () {
+                    self.playTorrent(item);
+                };
+
+                card[0]._onLong = function () {
+                    self.showMenu(item, card);
+                };
+
                 scroll.append(card);
             });
 
-            html.empty().append(scroll.render());
-        };
-
-        this.buildFilterPanel = function () {
-            var self = this;
-            var panel = $('<div class="jacred-filters" style="display:flex;gap:10px;padding:10px 0;flex-wrap:wrap;"></div>');
-
-            // Сортировка
-            var sortBtn = $('<div class="simple-button selector" style="padding:8px 16px;">Сортировка: ' + this.getSortLabel() + '</div>');
-            sortBtn.on('hover:enter', function () {
-                self.showSortSelect();
-            });
-            panel.append(sortBtn);
-
-            // Качество
-            var qualBtn = $('<div class="simple-button selector" style="padding:8px 16px;">Качество: ' + (filter_data.quality || 'Любое') + '</div>');
-            qualBtn.on('hover:enter', function () {
-                self.showQualitySelect();
-            });
-            panel.append(qualBtn);
-
-            // Озвучка
-            var voiceBtn = $('<div class="simple-button selector" style="padding:8px 16px;">Озвучка: ' + (filter_data.voice || 'Любая') + '</div>');
-            voiceBtn.on('hover:enter', function () {
-                self.showVoiceSelect();
-            });
-            panel.append(voiceBtn);
-
-            return panel;
-        };
-
-        this.getSortLabel = function () {
-            var labels = { sid: 'По сидам', size: 'По размеру', date: 'По дате' };
-            return labels[filter_data.sort] || 'По сидам';
-        };
-
-        this.showSortSelect = function () {
-            var self = this;
-            Lampa.Select.show({
-                title: 'Сортировка',
-                items: [
-                    { title: 'По сидам', value: 'sid', selected: filter_data.sort === 'sid' },
-                    { title: 'По размеру', value: 'size', selected: filter_data.sort === 'size' },
-                    { title: 'По дате', value: 'date', selected: filter_data.sort === 'date' }
-                ],
-                onSelect: function (a) {
-                    filter_data.sort = a.value;
-                    CONFIG.sort = a.value;
-                    self.applyFilters();
-                    Lampa.Controller.toggle('content');
-                },
-                onBack: function () {
-                    Lampa.Controller.toggle('content');
-                }
-            });
-        };
-
-        this.showQualitySelect = function () {
-            var self = this;
-            Lampa.Select.show({
-                title: 'Качество',
-                items: [
-                    { title: 'Любое', value: '', selected: !filter_data.quality },
-                    { title: '2160p (4K)', value: '2160p', selected: filter_data.quality === '2160p' },
-                    { title: '1080p', value: '1080p', selected: filter_data.quality === '1080p' },
-                    { title: '720p', value: '720p', selected: filter_data.quality === '720p' }
-                ],
-                onSelect: function (a) {
-                    filter_data.quality = a.value;
-                    self.applyFilters();
-                    Lampa.Controller.toggle('content');
-                },
-                onBack: function () {
-                    Lampa.Controller.toggle('content');
-                }
-            });
-        };
-
-        this.showVoiceSelect = function () {
-            var self = this;
-            Lampa.Select.show({
-                title: 'Озвучка',
-                items: [
-                    { title: 'Любая', value: '', selected: !filter_data.voice },
-                    { title: 'Дубляж', value: 'Дубляж', selected: filter_data.voice === 'Дубляж' },
-                    { title: 'Многоголосый', value: 'Многоголосый', selected: filter_data.voice === 'Многоголосый' },
-                    { title: 'Двухголосый', value: 'Двухголосый', selected: filter_data.voice === 'Двухголосый' },
-                    { title: 'Авторский', value: 'Авторский', selected: filter_data.voice === 'Авторский' }
-                ],
-                onSelect: function (a) {
-                    filter_data.voice = a.value;
-                    self.applyFilters();
-                    Lampa.Controller.toggle('content');
-                },
-                onBack: function () {
-                    Lampa.Controller.toggle('content');
-                }
-            });
-        };
-
-        this.applyFilters = function () {
-            filtred = results.filter(function (item) {
-                if (filter_data.quality && item.quality !== filter_data.quality) return false;
-                if (filter_data.voice && item.voice !== filter_data.voice) return false;
-                return true;
-            });
-            filtred = sortResults(filtred);
-            this.build();
-            Lampa.Layer.update(html);
-        };
-
-        this.createCard = function (item, index) {
-            var self = this;
-            var card = $(
-                '<div class="torrent-item selector layer--visible layer--render" style="padding:15px;margin-bottom:8px;">' +
-                '<div class="torrent-item__title" style="font-size:1.1em;margin-bottom:8px;">' + Lampa.Utils.shortText(item.Title, 100) + '</div>' +
-                '<div class="torrent-item__details" style="display:flex;gap:15px;flex-wrap:wrap;font-size:0.85em;opacity:0.7;">' +
-                (item.date ? '<div class="torrent-item__date">' + item.date + '</div>' : '') +
-                '<div class="torrent-item__tracker">' + item.Tracker + '</div>' +
-                '<div>Раздают: <span style="color:#4caf50;">' + item.Seeders + '</span></div>' +
-                '<div>Качают: <span style="color:#ff9800;">' + item.Peers + '</span></div>' +
-                '<div class="torrent-item__size" style="font-weight:bold;">' + item.size + '</div>' +
-                (item.quality ? '<div style="color:#2196f3;">' + item.quality + '</div>' : '') +
-                (item.hdr ? '<div style="color:#9c27b0;">' + item.hdr + '</div>' : '') +
-                (item.voice ? '<div style="color:#ffeb3b;">' + item.voice + '</div>' : '') +
-                '</div>' +
-                '</div>'
-            );
-
-            card.on('hover:focus', function (e) {
-                last = e.target;
-                scroll.update($(e.target), true);
-            });
-
-            card.on('hover:hover hover:touch', function (e) {
-                last = e.target;
-                Lampa.Navigator.focused(last);
-            });
-
-            card.on('hover:enter', function () {
-                self.playTorrent(item);
-            });
-
-            card.on('hover:long', function () {
-                self.showContextMenu(item, card);
-            });
-
-            return card;
+            html.append(scroll.render());
         };
 
         this.playTorrent = function (item) {
-            var self = this;
-            var magnet = item.MagnetUri;
-
-            if (!magnet && item.hash) {
-                magnet = 'magnet:?xt=urn:btih:' + item.hash;
-            }
+            var magnet = item.MagnetUri || item.magnet || item.Link || item.link || '';
+            var title = item.Title || item.title || '';
 
             if (!magnet) {
-                Lampa.Noty.show('Ошибка: magnet-ссылка не найдена');
+                Lampa.Noty.show('Magnet-ссылка не найдена');
                 return;
             }
 
             Lampa.Noty.show('Добавление в TorrServer...');
 
-            torrserverAdd(
-                magnet,
-                object.movie.title || item.Title,
-                object.movie.img || object.movie.poster || '',
-                function (res) {
-                    Lampa.Noty.show('Торрент добавлен. Запуск воспроизведения...');
-                    setTimeout(function () {
-                        torrserverStream(item.hash, undefined, function (streamData) {
-                            if (streamData && streamData.url) {
-                                Lampa.Player.play({
-                                    url: streamData.url,
-                                    title: item.Title,
-                                    type: 'torrent'
-                                });
-                            } else {
-                                Lampa.Noty.show('Ошибка получения потока');
-                            }
-                        }, function () {
-                            Lampa.Noty.show('Ошибка подключения к TorrServer');
-                        });
-                    }, 2000);
-                },
-                function () {
-                    Lampa.Noty.show('Ошибка добавления торрента в TorrServer');
+            addToTorrServer(magnet, title, object.movie.img || '', function (resp) {
+                Lampa.Noty.show('Торрент добавлен. Запуск...');
+
+                var hash = resp.hash || item.InfoHash || item.infohash || '';
+                if (hash) {
+                    var streamUrl = getStreamUrl(hash);
+                    Lampa.Player.play({
+                        url: streamUrl,
+                        title: title,
+                        quality: getQualityFromTitle(title) || 'auto'
+                    });
                 }
-            );
+            }, function (err) {
+                Lampa.Noty.show('Ошибка TorrServer: ' + err);
+            });
         };
 
-        this.showContextMenu = function (item, card) {
+        this.showMenu = function (item, cardElem) {
             var self = this;
             var enabled = Lampa.Controller.enabled().name;
+            var magnet = item.MagnetUri || item.magnet || item.Link || '';
+
+            var menu = [
+                { title: 'Добавить в TorrServer', action: 'add' },
+                { title: 'Копировать magnet', action: 'copy' }
+            ];
 
             Lampa.Select.show({
                 title: 'Действие',
-                items: [
-                    { title: 'Воспроизвести', action: 'play' },
-                    { title: 'Добавить в Мои торренты', action: 'add' },
-                    { title: 'Копировать magnet', action: 'copy' }
-                ],
+                items: menu,
                 onSelect: function (a) {
                     Lampa.Controller.toggle(enabled);
-                    if (a.action === 'play') {
-                        self.playTorrent(item);
-                    } else if (a.action === 'add') {
-                        var magnet = item.MagnetUri || ('magnet:?xt=urn:btih:' + item.hash);
-                        torrserverAdd(magnet, item.Title, '', function () {
-                            Lampa.Noty.show('Добавлено в Мои торренты');
-                        }, function () {
-                            Lampa.Noty.show('Ошибка добавления');
+                    if (a.action === 'add') {
+                        addToTorrServer(magnet, item.Title, object.movie.img, function () {
+                            Lampa.Noty.show('Добавлено в TorrServer');
+                        }, function (err) {
+                            Lampa.Noty.show('Ошибка: ' + err);
                         });
                     } else if (a.action === 'copy') {
-                        var magnetLink = item.MagnetUri || ('magnet:?xt=urn:btih:' + item.hash);
                         if (navigator.clipboard) {
-                            navigator.clipboard.writeText(magnetLink);
+                            navigator.clipboard.writeText(magnet);
                             Lampa.Noty.show('Magnet скопирован');
-                        } else {
-                            Lampa.Noty.show(magnetLink);
                         }
                     }
                 },
@@ -528,13 +447,28 @@
             });
         };
 
-        this.empty = function (text) {
-            var empty = new Lampa.Empty({ descr: text });
-            html.empty().append(empty.render());
+        this.showEmpty = function () {
+            var empty = new Lampa.Empty({
+                descr: 'По запросу ничего не найдено. Попробуйте изменить параметры поиска.'
+            });
+            html.append(empty.render());
+            this.start = empty.start.bind(empty);
+        };
+
+        this.showError = function (text) {
+            var empty = new Lampa.Empty({
+                descr: text
+            });
+            html.append(empty.render());
             this.start = empty.start.bind(empty);
         };
 
         this.start = function () {
+            if (!initialized) {
+                initialized = true;
+                this.initialize();
+            }
+
             Lampa.Controller.add('content', {
                 toggle: function () {
                     Lampa.Controller.collectionSet(scroll.render());
@@ -549,7 +483,6 @@
                 },
                 left: function () {
                     if (Lampa.Navigator.canmove('left')) Lampa.Navigator.move('left');
-                    else Lampa.Controller.toggle('menu');
                 },
                 right: function () {
                     if (Lampa.Navigator.canmove('right')) Lampa.Navigator.move('right');
@@ -558,6 +491,7 @@
                     Lampa.Activity.backward();
                 }
             });
+
             Lampa.Controller.toggle('content');
         };
 
@@ -572,143 +506,180 @@
             scroll.destroy();
             html.remove();
             results = null;
-            filtred = null;
         };
     }
 
-    // ===== РЕГИСТРАЦИЯ ПЛАГИНА =====
-    function init() {
-        // Загрузка сохранённых настроек
-        loadSettings();
+    // ==================== РЕГИСТРАЦИЯ ПЛАГИНА ====================
+    function initPlugin() {
+        console.log('[PidTor] Plugin v' + CONFIG.version + ' loaded');
 
-        // Регистрация компонента
-        Lampa.Component.add('jacred_search', JacRedSearch);
+        // Регистрируем компонент
+        Lampa.Component.add('pidtor', PidTorComponent);
 
-        // Добавление в меню торрентов
-        Lampa.Listener.follow('torrent', function (e) {
-            if (e.type === 'onenter' && e.element && e.element.jacred) {
-                // Обработка элементов из JacRed
-            }
-        });
-
-        // Добавление пункта в настройки
-        addSettings();
-
-        // Добавление источника в поиск торрентов
-        addTorrentSource();
-
-        console.log('JacRed Plugin v' + CONFIG.version + ' initialized');
-    }
-
-    function loadSettings() {
-        var saved = Lampa.Storage.get('jacred_settings', '{}');
-        if (saved && typeof saved === 'object') {
-            for (var key in saved) {
-                if (CONFIG.hasOwnProperty(key)) {
-                    CONFIG[key] = saved[key];
-                }
-            }
-        }
-    }
-
-    function saveSettings() {
-        Lampa.Storage.set('jacred_settings', CONFIG);
-    }
-
-    function addSettings() {
-        Lampa.SettingsApi.addComponent({
-            component: 'jacred',
-            icon: '<svg width="37" height="37" viewBox="0 0 37 37" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="33" height="33" rx="4" stroke="white" stroke-width="3"/><path d="M10 18h17M18 10v17" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>',
-            name: 'JacRed'
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'jacred',
-            param: { name: 'jacred_api_url', type: 'input', default: CONFIG.api_url },
-            field: { name: 'Адрес API', description: 'URL JacRed сервера' },
-            onChange: function (val) { CONFIG.api_url = val; saveSettings(); }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'jacred',
-            param: { name: 'jacred_api_key', type: 'input', default: CONFIG.api_key },
-            field: { name: 'API ключ', description: 'Ключ доступа (если требуется)' },
-            onChange: function (val) { CONFIG.api_key = val; saveSettings(); }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'jacred',
-            param: { name: 'jacred_ts_url', type: 'input', default: CONFIG.torrserver_url },
-            field: { name: 'TorrServer URL', description: 'Адрес TorrServer для стриминга' },
-            onChange: function (val) { CONFIG.torrserver_url = val; saveSettings(); }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'jacred',
-            param: { name: 'jacred_min_sid', type: 'select', values: { '0': 'Любое', '1': '1+', '3': '3+', '5': '5+', '10': '10+' }, default: String(CONFIG.min_sid) },
-            field: { name: 'Минимум сидов' },
-            onChange: function (val) { CONFIG.min_sid = parseInt(val); saveSettings(); }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'jacred',
-            param: { name: 'jacred_sort', type: 'select', values: { 'sid': 'По сидам', 'size': 'По размеру', 'date': 'По дате' }, default: CONFIG.sort },
-            field: { name: 'Сортировка по умолчанию' },
-            onChange: function (val) { CONFIG.sort = val; saveSettings(); }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'jacred',
-            param: { name: 'jacred_quality', type: 'select', values: { '': 'Любое', '720p': '720p', '1080p': '1080p', '2160p': '2160p (4K)' }, default: CONFIG.filter_quality },
-            field: { name: 'Фильтр качества' },
-            onChange: function (val) { CONFIG.filter_quality = val; saveSettings(); }
-        });
-    }
-
-    function addTorrentSource() {
-        // Интеграция с системой парсеров Lampa
-        if (Lampa.Parser && Lampa.Parser.addSource) {
-            Lampa.Parser.addSource({
-                name: 'JacRed',
-                search: function (params, onResults, onError) {
-                    apiSearch(params, function (results) {
-                        results.forEach(function (r) { r.jacred = true; });
-                        onResults(results);
-                    }, onError);
-                }
-            });
-        }
-
-        // Добавление кнопки в карточку фильма
+        // Добавляем кнопку в карточку фильма
         Lampa.Listener.follow('full', function (e) {
-            if (e.type === 'complite' && e.object) {
-                var btn = $('<div class="full-start__button selector button--jacred" style="margin-top:10px;">' +
-                    '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="2"/><path d="M6 10h8M10 6v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' +
-                    '<span>JacRed</span></div>');
+            if (e.type === 'complite' && e.object && e.object.activity) {
+                var render = e.object.activity.render();
+                if (!render) return;
+
+                var btn = $('<div class="full-start__button selector button--pidtor">');
+                btn.html('<svg viewBox="0 0 47 47" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M23.4 0.6C10.7 0.6 0.4 10.9 0.4 23.6C0.4 36.3 10.7 46.6 23.4 46.6C36.1 46.6 46.4 36.3 46.4 23.6C46.4 10.9 36.1 0.6 23.4 0.6ZM38.9 29.5C35.8 29.5 34 27.1 34 27.1C34 27.1 32.5 33.6 25.4 33.6C24 33.6 21.8 32.7 21.8 32.7L26 42.4C25.1 42.5 24.3 42.6 23.4 42.6C21.3 42.6 19.2 42.2 17.3 41.5L7.6 15.4C7.6 15.4 6.9 14.2 8 13.9C9.1 13.6 13.4 12.7 13.4 12.7C13.4 12.7 14.9 12.2 15.2 13.2C15.7 14.5 19.3 24.3 19.3 24.3C19.3 24.3 21 27.6 25.8 27.6C30.5 27.6 31.7 24.1 31.5 23.6C30.3 20.6 26.5 11.8 26.5 11.8C26.5 11.8 25.9 10.7 27.3 10.4C28.7 10.1 31.1 9.7 31.1 9.7C31.1 9.7 32.2 9.5 32.7 10.5C33.5 11.9 37.9 21.7 37.9 21.7C37.9 21.7 39 24.6 41.2 24.6C41.7 24.6 42 24.6 42.4 24.5C42.3 26.2 42 27.8 41.5 29.3C40.9 29.4 40.2 29.5 38.9 29.5Z" fill="currentColor"/></svg>');
+                btn.append('<span>Торренты</span>');
 
                 btn.on('hover:enter', function () {
                     Lampa.Activity.push({
-                        component: 'jacred_search',
-                        movie: e.object.card || e.object.movie || {},
-                        search: (e.object.card || e.object.movie || {}).title || '',
-                        title: 'JacRed - ' + ((e.object.card || e.object.movie || {}).title || 'Поиск')
+                        component: 'pidtor',
+                        movie: e.object.movie || e.object.card || {},
+                        search: (e.object.movie || e.object.card || {}).title || '',
+                        title: 'Торренты',
+                        page: 1
                     });
                 });
 
-                var buttonsContainer = e.object.activity.render().find('.full-start-new__buttons');
-                if (buttonsContainer.length) {
-                    buttonsContainer.append(btn);
+                var buttons = render.find('.full-start-new__buttons, .full-start__buttons');
+                if (buttons.length) {
+                    buttons.append(btn);
                 }
             }
         });
+
+        // Настройки плагина
+        Lampa.SettingsApi.addParam({
+            component: 'plugins',
+            param: {
+                name: 'pidtor_redapi',
+                type: 'input',
+                default: CONFIG.redapi
+            },
+            field: {
+                name: 'PidTor: Адрес JacRed API',
+                description: 'Например: http://jac.red'
+            },
+            onChange: function (val) {
+                CONFIG.redapi = val;
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'plugins',
+            param: {
+                name: 'pidtor_apikey',
+                type: 'input',
+                default: CONFIG.apikey
+            },
+            field: {
+                name: 'PidTor: API ключ',
+                description: 'Ключ доступа к JacRed (если требуется)'
+            },
+            onChange: function (val) {
+                CONFIG.apikey = val;
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'plugins',
+            param: {
+                name: 'pidtor_torrs',
+                type: 'input',
+                default: CONFIG.torrs[0]
+            },
+            field: {
+                name: 'PidTor: TorrServer URL',
+                description: 'Например: http://127.0.0.1:8090'
+            },
+            onChange: function (val) {
+                CONFIG.torrs = [val];
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'plugins',
+            param: {
+                name: 'pidtor_min_sid',
+                type: 'select',
+                values: { '0': 'Любое', '1': '1+', '5': '5+', '10': '10+', '50': '50+' },
+                default: '1'
+            },
+            field: {
+                name: 'PidTor: Минимум сидов'
+            },
+            onChange: function (val) {
+                CONFIG.min_sid = parseInt(val) || 0;
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'plugins',
+            param: {
+                name: 'pidtor_sort',
+                type: 'select',
+                values: {
+                    'sid': 'По сидам',
+                    'size': 'По размеру',
+                    'date': 'По дате',
+                    'name': 'По названию'
+                },
+                default: 'sid'
+            },
+            field: {
+                name: 'PidTor: Сортировка'
+            },
+            onChange: function (val) {
+                CONFIG.sort = val;
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'plugins',
+            param: {
+                name: 'pidtor_quality',
+                type: 'select',
+                values: {
+                    '': 'Любое',
+                    '720p': '720p',
+                    '1080p': '1080p',
+                    '2160p': '2160p (4K)'
+                },
+                default: ''
+            },
+            field: {
+                name: 'PidTor: Качество видео'
+            },
+            onChange: function (val) {
+                CONFIG.force_quality = val;
+            }
+        });
+
+        // Загружаем сохранённые настройки
+        var saved = Lampa.Storage.get('pidtor_config', '');
+        if (saved) {
+            try {
+                var cfg = JSON.parse(saved);
+                for (var k in cfg) {
+                    if (CONFIG.hasOwnProperty(k)) CONFIG[k] = cfg[k];
+                }
+            } catch (e) {}
+        }
+
+        console.log('[PidTor] Initialized. API: ' + CONFIG.redapi);
     }
 
-    // ===== ЗАПУСК =====
-    if (window.appready) {
-        init();
+    // ==================== ЗАПУСК ====================
+    if (typeof Lampa !== 'undefined') {
+        initPlugin();
     } else {
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') init();
-        });
+        // Ожидание загрузки Lampa
+        var checkInterval = setInterval(function () {
+            if (typeof Lampa !== 'undefined') {
+                clearInterval(checkInterval);
+                initPlugin();
+            }
+        }, 500);
+
+        // Таймаут 30 сек
+        setTimeout(function () {
+            clearInterval(checkInterval);
+        }, 30000);
     }
+
 })();
