@@ -7,7 +7,7 @@
         version: '1.2.0',
         api_url: 'https://jacred.xyz',
         api_key: '',
-        torrserver_url: 'http://127.0.0.1:8090',
+        torrserver_url: '192.168.10.167:8090',
         torrserver_auth: false,
         torrserver_login: '',
         torrserver_password: '',
