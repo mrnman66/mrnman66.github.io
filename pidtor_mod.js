@@ -1,7 +1,7 @@
 (function() {
     "use strict";
 
-    // --- НАСТРОЙКИ ПО УМОЛЧАНИЮ (для специфичных параметров) ---
+    // --- НАСТРОЙКИ ПО УМОЛЧАНИЮ ---
     const DEFAULTS = {
         min_seeders: 5,
         max_size_gb: 50,
@@ -14,14 +14,10 @@
     // Функция для получения актуальных конфигураций
     function getConfig() {
         return {
-            // Берем из глобальных настроек Lampa или используем дефолтные значения
             jacred_api: Lampa.Storage.cache('jackett_url') || 'https://jacred.xyz',
             torrserver_host: Lampa.Storage.cache('torrserver_url') || 'http://192.168.1.100:8090',
-            
-            // Специфичные настройки плагина
             min_seeders: parseInt(Lampa.Storage.get('plugin_pidtor_min_sid')) || DEFAULTS.min_seeders,
             max_size_gb: parseFloat(Lampa.Storage.get('plugin_pidtor_max_size')) || DEFAULTS.max_size_gb,
-            
             proxy_url: 'https://lampac.club/proxy/'
         };
     }
@@ -57,41 +53,53 @@
         return 'SD';
     }
 
-    // --- РЕГИСТРАЦИЯ НАСТРОЕК В МЕНЮ LAMPA ---
+    // --- РЕГИСТРАЦИЯ НАСТРОЕК ЧЕРЕЗ SettingsApi ---
     function registerSettings() {
-        Lampa.Settings.main().add({
-            name: 'pidtor_settings',
-            title: 'Настройки PidTor',
-            template: () => {
-                return `
-                    <div class="settings-param" data-name="min_sid">
-                        <div class="settings-param__name">Мин. количество сидов</div>
-                        <div class="settings-param__value">${Lampa.Storage.get('plugin_pidtor_min_sid') || DEFAULTS.min_seeders}</div>
-                    </div>
-                    <div class="settings-param" data-name="max_size">
-                        <div class="settings-param__name">Макс. размер файла (ГБ)</div>
-                        <div class="settings-param__value">${Lampa.Storage.get('plugin_pidtor_max_size') || DEFAULTS.max_size_gb}</div>
-                    </div>
-                `;
-            },
-            onSelect: (param) => {
-                let currentVal = '';
-                if (param.name === 'min_sid') currentVal = Lampa.Storage.get('plugin_pidtor_min_sid') || DEFAULTS.min_seeders;
-                if (param.name === 'max_size') currentVal = Lampa.Storage.get('plugin_pidtor_max_size') || DEFAULTS.max_size_gb;
+        // Добавляем компонент в меню настроек
+        Lampa.SettingsApi.addComponent({
+            component: 'pidtor',
+            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17L12 22L22 17" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            name: 'PidTor (JacRed)'
+        });
 
-                Lampa.Keyboard.primitive({
-                    value: String(currentVal),
-                    onChange: (val) => {
-                        if (param.name === 'min_sid') Lampa.Storage.set('plugin_pidtor_min_sid', val);
-                        if (param.name === 'max_size') Lampa.Storage.set('plugin_pidtor_max_size', val);
-                        param.querySelector('.settings-param__value').innerText = val;
-                    }
-                });
+        // Параметр: Минимальное количество сидов
+        Lampa.SettingsApi.addParam({
+            component: 'pidtor',
+            param: {
+                type: 'input',
+                placeholder: '5'
+            },
+            field: {
+                name: 'Мин. количество сидов',
+                value: Lampa.Storage.get('plugin_pidtor_min_sid') || DEFAULTS.min_seeders
+            },
+            onChange: (val) => {
+                Lampa.Storage.set('plugin_pidtor_min_sid', val);
+            }
+        });
+
+        // Параметр: Максимальный размер файла
+        Lampa.SettingsApi.addParam({
+            component: 'pidtor',
+            param: {
+                type: 'input',
+                placeholder: '50'
+            },
+            field: {
+                name: 'Макс. размер файла (ГБ)',
+                value: Lampa.Storage.get('plugin_pidtor_max_size') || DEFAULTS.max_size_gb
+            },
+            onChange: (val) => {
+                Lampa.Storage.set('plugin_pidtor_max_size', val);
             }
         });
     }
 
     function startPlugin() {
+        // Защита от двойной инициализации
+        if (window.pidtor_plugin_initialized) return;
+        window.pidtor_plugin_initialized = true;
+
         registerSettings();
 
         Lampa.Search.addSource({
@@ -104,7 +112,6 @@
                 if (!query) return callback([]);
 
                 let yearParam = object.year ? `&Year=${object.year}` : '';
-                // Используем глобальный jackett_url из настроек Lampa
                 const searchUrl = `${config.jacred_api}/api/v2.0/indexers/all/results?Query=${encodeURIComponent(query)}${yearParam}&Category=2000,2010,2020,2030,2040,2050`;
                 
                 const data = await fetchWithProxy(searchUrl);
@@ -141,7 +148,6 @@
 
             select: async (item, callback) => {
                 const config = getConfig();
-                // Используем глобальный torrserver_url из настроек Lampa
                 if (!addedHashes.has(item.hash)) {
                     const tsAddUrl = `${config.torrserver_host}/torrent/add`;
                     await fetchLocal(tsAddUrl, {
