@@ -1,7 +1,6 @@
 (function() {
     "use strict";
 
-    // --- НАСТРОЙКИ ПО УМОЛЧАНИЮ ---
     const DEFAULTS = {
         min_seeders: 5,
         max_size_gb: 50,
@@ -11,7 +10,6 @@
 
     const addedHashes = new Set();
 
-    // Функция для получения актуальных конфигураций
     function getConfig() {
         return {
             jacred_api: Lampa.Storage.cache('jackett_url') || 'https://jacred.xyz',
@@ -24,82 +22,66 @@
 
     async function fetchWithProxy(url) {
         const config = getConfig();
-        const targetUrl = encodeURIComponent(url);
         try {
-            const response = await fetch(`${config.proxy_url}${targetUrl}`);
-            if (!response.ok) throw new Error(`Proxy error: ${response.status}`);
+            const response = await fetch(`${config.proxy_url}${encodeURIComponent(url)}`);
+            if (!response.ok) return null;
             return await response.json();
-        } catch (e) {
-            console.log('PidTor Proxy Error:', e);
-            return null;
-        }
+        } catch (e) { return null; }
     }
 
     async function fetchLocal(url, options = {}) {
         try {
             const response = await fetch(url, options);
-            if (!response.ok) throw new Error(`Local error: ${response.status}`);
+            if (!response.ok) return null;
             return await response.json();
-        } catch (e) {
-            console.log('PidTor Local Error:', e);
-            return null;
-        }
+        } catch (e) { return null; }
     }
 
     function parseQuality(title) {
+        if (!title) return 'SD';
         if (/2160p|4K|UHD/i.test(title)) return '4K';
         if (/1080p|FHD/i.test(title)) return '1080p';
         if (/720p|HD/i.test(title)) return '720p';
         return 'SD';
     }
 
-    // --- РЕГИСТРАЦИЯ НАСТРОЕК ЧЕРЕЗ SettingsApi ---
+    // --- НАСТРОЙКИ ЧЕРЕЗ SettingsApi (Безопасный метод) ---
     function registerSettings() {
-        // Добавляем компонент в меню настроек
         Lampa.SettingsApi.addComponent({
             component: 'pidtor',
-            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17L12 22L22 17" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2"/><path d="M2 17L12 22L22 17" stroke="white" stroke-width="2"/><path d="M2 12L12 17L22 12" stroke="white" stroke-width="2"/></svg>',
             name: 'PidTor (JacRed)'
         });
 
-        // Параметр: Минимальное количество сидов
-        Lampa.SettingsApi.addParam({
-            component: 'pidtor',
-            param: {
-                type: 'input',
-                placeholder: '5'
-            },
-            field: {
-                name: 'Мин. количество сидов',
-                value: Lampa.Storage.get('plugin_pidtor_min_sid') || DEFAULTS.min_seeders
-            },
-            onChange: (val) => {
-                Lampa.Storage.set('plugin_pidtor_min_sid', val);
-            }
-        });
+        const createInputParam = (name, key, defaultVal, label) => {
+            Lampa.SettingsApi.addParam({
+                component: 'pidtor',
+                param: { type: 'button' },
+                field: { 
+                    name: label, 
+                    value: Lampa.Storage.get(key) || defaultVal 
+                },
+                onChange: () => {
+                    let current = Lampa.Storage.get(key) || defaultVal;
+                    Lampa.Keyboard.primitive({
+                        value: String(current),
+                        onChange: (val) => {
+                            Lampa.Storage.set(key, val);
+                            // Обновляем отображение значения в меню
+                            Lampa.SettingsApi.updateParam('pidtor', name, { value: val });
+                        }
+                    });
+                }
+            });
+        };
 
-        // Параметр: Максимальный размер файла
-        Lampa.SettingsApi.addParam({
-            component: 'pidtor',
-            param: {
-                type: 'input',
-                placeholder: '50'
-            },
-            field: {
-                name: 'Макс. размер файла (ГБ)',
-                value: Lampa.Storage.get('plugin_pidtor_max_size') || DEFAULTS.max_size_gb
-            },
-            onChange: (val) => {
-                Lampa.Storage.set('plugin_pidtor_max_size', val);
-            }
-        });
+        createInputParam('min_sid', 'plugin_pidtor_min_sid', DEFAULTS.min_seeders, 'Мин. сидов');
+        createInputParam('max_size', 'plugin_pidtor_max_size', DEFAULTS.max_size_gb, 'Макс. размер (ГБ)');
     }
 
     function startPlugin() {
-        // Защита от двойной инициализации
         if (window.pidtor_plugin_initialized) return;
         window.pidtor_plugin_initialized = true;
-
         registerSettings();
 
         Lampa.Search.addSource({
@@ -119,6 +101,9 @@
 
                 let results = [];
                 for (let item of data.Results) {
+                    // Строгая проверка наличия обязательных полей
+                    if (!item.Title || !item.MagnetUri || !item.InfoHash) continue;
+
                     let sizeGb = item.Size / (1024 * 1024 * 1024);
                     let isSerial = object.type === 'tv';
                     
@@ -126,13 +111,17 @@
                     if (sizeGb > (isSerial ? DEFAULTS.max_serial_size_gb : config.max_size_gb)) continue;
 
                     results.push({
-                        title: item.Title,
+                        title: item.Title, // Обязательно строка
                         magnet: item.MagnetUri,
                         size: item.Size,
                         seeders: item.Seeders,
                         quality: parseQuality(item.Title),
                         hash: item.InfoHash,
-                        is_serial: isSerial
+                        is_serial: isSerial,
+                        // Добавляем заглушки для полей, которые Lampa может ожидать
+                        original_title: item.Title,
+                        poster: '', 
+                        rating: 0
                     });
                 }
 
@@ -162,8 +151,8 @@
                     const filesUrl = `${config.torrserver_host}/torrent/files/${item.hash}`;
                     const filesData = await fetchLocal(filesUrl);
 
-                    if (filesData && filesData.length > 0) {
-                        let videoFiles = filesData.filter(f => f.name.match(/\.(mp4|mkv|avi|mov)$/i));
+                    if (filesData && Array.isArray(filesData) && filesData.length > 0) {
+                        let videoFiles = filesData.filter(f => f.name && f.name.match(/\.(mp4|mkv|avi|mov)$/i));
                         if (videoFiles.length > 0) {
                             Lampa.Select.open({
                                 title: 'Выбор серии',
@@ -172,6 +161,8 @@
                                     callback({ url: `${config.torrserver_host}/stream/${item.hash}/${fileId}` });
                                 }
                             });
+                        } else {
+                            Lampa.Noty.show('Нет видеофайлов в торренте');
                         }
                     }
                 } else {
