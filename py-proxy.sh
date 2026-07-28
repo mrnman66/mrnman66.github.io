@@ -292,7 +292,7 @@ echo -e "${YELLOW}TG WS Proxy Python: ${RED}не запущен${NC} ${CYAN}(v${
 fi
 if check_update; then
 LATEST_VER="$(get_latest_version)"
-echo -e "${YELLOW}⚠ Доступно обновление:${NC} ${CYAN}v${INST_VER:-?} → v${LATEST_VER}${NC}"
+echo -e "${YELLOW}Доступно обновление:${NC} ${CYAN}v${INST_VER:-?} → v${LATEST_VER}${NC}"
 fi
 else
 echo -e "${YELLOW}TG WS Proxy Python: ${RED}не установлен${NC}"
