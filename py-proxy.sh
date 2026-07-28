@@ -212,7 +212,38 @@ rm -rf "$PROXY_DIR" "$BIN_PATH_PH" "$INIT_PATH_PH" /root/.cache/pip 2>/dev/null
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 
 SECRET="$OLD_SECRET"
-install_TG_PH
+echo -e "\n${MAGENTA}Скачиваем и распаковываем TG WS Proxy Python${NC}"
+rm -rf "$PROXY_DIR"
+cd /root
+wget -q -O tg-ws-proxy.zip "$TG_URL" || { echo -e "\n${RED}Ошибка скачивания!${NC}"; PAUSE; return 1; }
+unzip -q tg-ws-proxy.zip || { echo -e "\n${RED}Ошибка распаковки!${NC}"; PAUSE; return 1; }
+mv tg-ws-proxy-main tg-ws-proxy
+rm -f tg-ws-proxy.zip
+cd "$PROXY_DIR"
+
+echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Python${NC}"
+pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e . >/dev/null 2>&1
+
+cat << EOF > /etc/init.d/tg-ws-proxy
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+start_service() {
+procd_open_instance
+procd_set_param command /usr/bin/tg-ws-proxy --host 0.0.0.0 --secret $SECRET
+procd_set_param respawn
+procd_close_instance
+}
+EOF
+chmod +x /etc/init.d/tg-ws-proxy
+/etc/init.d/tg-ws-proxy enable >/dev/null 2>&1
+/etc/init.d/tg-ws-proxy start >/dev/null 2>&1
+
+if pgrep -f tg-ws-proxy >/dev/null 2>&1; then
+echo -e "\n${GREEN}Сервис TG WS Proxy Python запущен!${NC}"
+else
+echo -e "\n${RED}Ошибка установки!${NC}"
+fi
 PAUSE
 }
 
