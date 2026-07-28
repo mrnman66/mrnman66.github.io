@@ -311,7 +311,7 @@ fi
 echo -e "\n${CYAN}1)${GREEN} $( [ $IS_INSTALLED -eq 1 ] && echo "Удалить ${NC}TG WS Proxy Python" || echo "Установить ${NC}TG WS Proxy Python" )"
 if [ $IS_INSTALLED -eq 1 ]; then
 if check_update; then
-echo -e "${CYAN}2)${GREEN} ${RED}★ Обновить ${NC}TG WS Proxy Python ${RED}(доступно)${NC}"
+echo -e "${CYAN}2)${GREEN} ${RED} Обновить ${NC}TG WS Proxy Python ${RED}(доступно)${NC}"
 else
 echo -e "${CYAN}2)${GREEN} Обновить ${NC}TG WS Proxy Python"
 fi
