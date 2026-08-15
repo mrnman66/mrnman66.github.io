@@ -97,7 +97,7 @@ return 1
 fi
 
 echo -e "\n${MAGENTA}Устанавливаем необходимые пакеты${NC}"
-$INSTALL python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1 || {
+$INSTALL python3-light python3-pip python3-cryptography python3-certifi unzip >/dev/null 2>&1 || {
 echo -e "\n${RED}Ошибка установки пакетов!${NC}"; 
 PAUSE; 
 return 1
@@ -160,8 +160,8 @@ echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
 attempts=0
 while [ $attempts -lt 10 ]; do
-$DELETE python3-light python3-pip python3-cryptography unzip >/dev/null 2>&1
-$CHECK_CMD 2>/dev/null | grep -qE "python3-light|python3-pip|python3-cryptography" || break
+$DELETE python3-light python3-pip python3-cryptography python3-certifi unzip >/dev/null 2>&1
+$CHECK_CMD 2>/dev/null | grep -qE "python3-light|python3-pip|python3-cryptography|python3-certifi" || break
 attempts=$((attempts + 1))
 done
 [ $attempts -eq 10 ] && echo -e "\n${RED}Некоторые пакеты не удалились!${NC}"
