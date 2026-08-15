@@ -12,7 +12,7 @@ TG_URL="https://github.com/Flowseal/tg-ws-proxy/archive/refs/heads/master.zip"
 RAW_INIT_URL="https://raw.githubusercontent.com/Flowseal/tg-ws-proxy/master/proxy/__init__.py"
 PROXY_DIR="/root/tg-ws-proxy"
 INIT_FILE="$PROXY_DIR/proxy/__init__.py"
-REQUIRED_PKGS="python3-light python3-pip python3-cryptography"
+REQUIRED_PKGS="python3-light python3-pip python3-cryptography python3-certifi"
 PAUSE() { echo -ne "\nНажмите Enter..."; read dummy; }
 
 # Определение IP для OpenWrt с фоллбэками
