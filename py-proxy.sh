@@ -128,6 +128,8 @@ cd "$PROXY_DIR"
 
 echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Python${NC}"
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e . >/dev/null 2>&1
+pip install httpx >/dev/null 2>&1
+pip install h2 >/dev/null 2>&1
 
 cat << EOF > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
@@ -158,6 +160,8 @@ echo -e "\n${MAGENTA}Удаляем TG WS Proxy Python${NC}"
 /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 echo -e "${CYAN}Удаляем пакеты и зависимости${NC}"
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
+pip uninstall -y httpx >/dev/null 2>&1
+pip uninstall -y h2 >/dev/null 2>&1
 attempts=0
 while [ $attempts -lt 10 ]; do
 $DELETE python3-light python3-pip python3-cryptography python3-certifi unzip >/dev/null 2>&1
@@ -223,6 +227,8 @@ cd "$PROXY_DIR"
 
 echo -e "\n${MAGENTA}Устанавливаем TG WS Proxy Python${NC}"
 pip install --root-user-action=ignore --no-deps --disable-pip-version-check --timeout 2 --retries 1 -e . >/dev/null 2>&1
+pip install httpx >/dev/null 2>&1
+pip install h2 >/dev/null 2>&1
 
 cat << EOF > /etc/init.d/tg-ws-proxy
 #!/bin/sh /etc/rc.common
@@ -265,6 +271,8 @@ echo -e "${CYAN}Секрет сохранён: ${NC}$OLD_SECRET"
 /etc/init.d/tg-ws-proxy disable >/dev/null 2>&1
 rm -rf "$PROXY_DIR" "$BIN_PATH_PH" "$INIT_PATH_PH" /root/.cache/pip 2>/dev/null
 pip uninstall -y tg-ws-proxy >/dev/null 2>&1
+pip uninstall -y httpx >/dev/null 2>&1
+pip uninstall -y h2 >/dev/null 2>&1
 
 echo -e "${CYAN}Старая версия удалена, начинаем чистую установку...${NC}"
 
