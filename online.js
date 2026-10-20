@@ -9592,7 +9592,7 @@
       var object = _object;
       var select_title = '';
       var prox = component.proxy('anilibria2');
-      var embed = 'https://anilibria.top/api/docs/v1';
+      var embed = 'https://aniliberty.top/api/v1/';
       var filter_items = {};
       var choice = {
         season: 0,
